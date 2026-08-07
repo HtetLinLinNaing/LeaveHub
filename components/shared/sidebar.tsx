@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { clearMockSession, type MockSession } from "@/lib/auth";
+import { clearMockSession } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 import {
   LayoutDashboard,
@@ -14,6 +15,8 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useSidebar } from "@/components/shared/sidebar-context";
 
 interface NavItem {
   label: string;
@@ -31,31 +34,36 @@ const navItems: NavItem[] = [
   { label: "Policies", href: "/policies", icon: Settings, roles: ["hr", "admin"] },
 ];
 
-export function Sidebar({ role, email }: { role: Role; email: string }) {
+function SidebarContent({ role, email }: { role: Role; email: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { close } = useSidebar();
 
   const filteredItems = navItems.filter((item) => item.roles.includes(role));
 
   function handleLogout() {
     clearMockSession();
+    close();
     router.push("/login");
     router.refresh();
   }
 
   return (
-    <aside className="flex w-64 flex-col border-r bg-white">
+    <div className="flex h-full w-full flex-col bg-white">
       <div className="flex h-14 items-center border-b px-4">
         <h1 className="text-lg font-bold">LeaveHub</h1>
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
         {filteredItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={close}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
@@ -80,6 +88,38 @@ export function Sidebar({ role, email }: { role: Role; email: string }) {
           Sign out
         </button>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+export function Sidebar({ role, email }: { role: Role; email: string }) {
+  const { isOpen, close } = useSidebar();
+  const pathname = usePathname();
+
+  // Close drawer on navigation
+  useEffect(() => {
+    close();
+  }, [pathname, close]);
+
+  return (
+    <>
+      {/* Mobile: off-canvas drawer */}
+      <div className="md:hidden">
+        <Sheet open={isOpen} onOpenChange={(v) => (v ? null : close())}>
+          <SheetContent
+            side="left"
+            className="w-64 max-w-full p-0"
+            showCloseButton={false}
+          >
+            <SidebarContent role={role} email={email} />
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Tablet/Desktop: persistent aside */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r bg-white md:flex">
+        <SidebarContent role={role} email={email} />
+      </aside>
+    </>
   );
 }
