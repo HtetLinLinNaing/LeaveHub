@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { getMockSessionFromCookie } from "@/lib/auth";
+import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,60 +8,48 @@ import { format } from "date-fns";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
-  const session = getMockSessionFromCookie(cookieStore.toString());
+  const session = getSessionFromRequest(cookieStore.toString());
   const supabase = await createClient();
-
-  // Get user + employee
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session?.email)
-    .single();
-
-  const { data: employee } = await supabase
-    .from("employees")
-    .select("id, first_name, last_name, department")
-    .eq("user_id", user?.id)
-    .single();
-
-  // Leave balances
-  const { data: balances } = await supabase
-    .from("leave_balances")
-    .select("*, leave_types(name)")
-    .eq("employee_id", employee?.id ?? "")
-    .eq("year", new Date().getFullYear());
-
-  // Pending requests count
-  const { count: pendingCount } = await supabase
-    .from("leave_requests")
-    .select("*", { count: "exact", head: true })
-    .eq("employee_id", employee?.id ?? "")
-    .eq("status", "pending");
-
-  // Recent requests
-  const { data: recentRequests } = await supabase
-    .from("leave_requests")
-    .select("*, leave_types(name)")
-    .eq("employee_id", employee?.id ?? "")
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  // Upcoming holidays
+  const { employee } = await getCurrentEmployee(supabase, session?.email);
   const today = format(new Date(), "yyyy-MM-dd");
-  const { data: holidays } = await supabase
-    .from("holidays")
-    .select("*")
-    .gte("date", today)
-    .order("date")
-    .limit(3);
+  const year = new Date().getFullYear();
 
-  // Employees away today
-  const { data: awayToday } = await supabase
-    .from("leave_requests")
-    .select("employees(first_name, last_name)")
-    .eq("status", "approved")
-    .lte("start_date", today)
-    .gte("end_date", today);
+  const [
+    { data: balances },
+    { count: pendingCount },
+    { data: recentRequests },
+    { data: holidays },
+    { data: awayToday },
+  ] = await Promise.all([
+    supabase
+      .from("leave_balances")
+      .select("*, leave_types(name)")
+      .eq("employee_id", employee?.id ?? "")
+      .eq("year", year),
+    supabase
+      .from("leave_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("employee_id", employee?.id ?? "")
+      .eq("status", "pending"),
+    supabase
+      .from("leave_requests")
+      .select("*, leave_types(name)")
+      .eq("employee_id", employee?.id ?? "")
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("holidays")
+      .select("*")
+      .gte("date", today)
+      .order("date")
+      .limit(3),
+    supabase
+      .from("leave_requests")
+      .select("employees(first_name, last_name)")
+      .eq("status", "approved")
+      .lte("start_date", today)
+      .gte("end_date", today),
+  ]);
 
   return (
     <div>

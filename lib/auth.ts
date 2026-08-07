@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Role } from "./types";
 
 const MOCK_USER_KEY = "leavehub_mock_user";
@@ -8,6 +10,16 @@ export interface MockSession {
   email: string;
   role: Role;
 }
+
+export type CurrentEmployee = {
+  user: { id: string; role: Role } | null;
+  employee: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    department?: string;
+  } | null;
+};
 
 export function setMockSession(session: MockSession) {
   if (typeof document !== "undefined") {
@@ -31,6 +43,36 @@ export function getMockSessionFromCookie(cookieHeader: string): MockSession | nu
     return null;
   }
 }
+
+// Per-request memoized session lookup. React's `cache()` dedupes calls within
+// a single server render, so layout + every page parse the cookie once total.
+export const getSessionFromRequest = cache(
+  (cookieHeader: string): MockSession | null =>
+    getMockSessionFromCookie(cookieHeader)
+);
+
+// Per-request memoized user + employee lookup. Replaces the duplicated
+// `users` + `employees` query pair in every dashboard page.
+export const getCurrentEmployee = cache(
+  async (
+    supabase: SupabaseClient,
+    email: string | undefined
+  ): Promise<CurrentEmployee> => {
+    if (!email) return { user: null, employee: null };
+    const { data: user } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("email", email)
+      .single();
+    if (!user) return { user: null, employee: null };
+    const { data: employee } = await supabase
+      .from("employees")
+      .select("id, first_name, last_name, department")
+      .eq("user_id", user.id)
+      .single();
+    return { user, employee };
+  }
+);
 
 export function hasRole(userRole: Role, required: Role[]): boolean {
   return required.includes(userRole);

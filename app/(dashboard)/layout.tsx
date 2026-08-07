@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getMockSessionFromCookie, type MockSession } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { Sidebar } from "@/components/shared/sidebar";
 import { SidebarProvider } from "@/components/shared/sidebar-context";
 import { MobileTopBar } from "@/components/shared/mobile-top-bar";
@@ -11,8 +11,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const cookieHeader = cookieStore.toString();
-  const session = getMockSessionFromCookie(cookieHeader);
+  const session = getSessionFromRequest(cookieStore.toString());
 
   if (!session) {
     redirect("/login");

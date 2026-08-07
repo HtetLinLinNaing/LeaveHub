@@ -1,27 +1,14 @@
 import { cookies } from "next/headers";
-import { getMockSessionFromCookie } from "@/lib/auth";
+import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ApprovalList } from "@/components/features/approvals/approval-list";
 
 export default async function ApprovalsPage() {
   const cookieStore = await cookies();
-  const session = getMockSessionFromCookie(cookieStore.toString());
+  const session = getSessionFromRequest(cookieStore.toString());
   const supabase = await createClient();
+  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
 
-  // Get user's role and employee record
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session?.email)
-    .single();
-
-  const { data: employee } = await supabase
-    .from("employees")
-    .select("id")
-    .eq("user_id", user?.id)
-    .single();
-
-  // Get pending requests for this manager's team
   let query = supabase
     .from("leave_requests")
     .select(`
@@ -37,7 +24,6 @@ export default async function ApprovalsPage() {
     query = query.eq("employees.manager_id", employee.id);
   }
 
-  // HR sees all pending requests
   const { data: requests } = await query;
 
   return (
