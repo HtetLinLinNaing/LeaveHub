@@ -184,3 +184,138 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create employee" };
   }
 }
+
+// ----- Self-service leave request (own employee_id) -----
+
+export interface CreateLeaveRequestInput {
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  duration_type: "full_day" | "half_day";
+  reason: string;
+}
+
+export async function createLeaveRequest(
+  input: CreateLeaveRequestInput
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, employee } = await requireSession();
+    if (!employee) return { ok: false, error: "Employee record not found" };
+
+    // Server-side date validation
+    if (input.start_date > input.end_date) {
+      return { ok: false, error: "Start date must be on or before end date" };
+    }
+
+    const { data: days, error: calcError } = await supabase.rpc(
+      "calculate_working_days",
+      { start_d: input.start_date, end_d: input.end_date }
+    );
+    if (calcError) throw calcError;
+
+    const actualDays = input.duration_type === "half_day" ? 0.5 : days;
+
+    const { error: insertError } = await supabase.from("leave_requests").insert({
+      employee_id: employee.id,
+      leave_type_id: input.leave_type_id,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      days: actualDays,
+      duration_type: input.duration_type,
+      reason: input.reason,
+      status: "pending",
+    });
+    if (insertError) throw insertError;
+
+    revalidatePath("/leave");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to submit request" };
+  }
+}
+
+// ----- Cancel own leave request -----
+
+export async function cancelLeaveRequest(requestId: string): Promise<ApprovalResult> {
+  try {
+    const { supabase, employee } = await requireSession();
+    if (!employee) return { ok: false, error: "Employee record not found" };
+
+    // Only own + still pending
+    const { error: updateError } = await supabase
+      .from("leave_requests")
+      .update({ status: "cancelled" })
+      .eq("id", requestId)
+      .eq("employee_id", employee.id)
+      .eq("status", "pending");
+    if (updateError) throw updateError;
+
+    revalidatePath("/leave");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to cancel request" };
+  }
+}
+
+// ----- Holiday create (HR/admin) -----
+
+export async function createHoliday(input: { name: string; date: string }): Promise<ApprovalResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!canManageEmployees(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    const { error } = await supabase.from("holidays").insert(input);
+    if (error) throw error;
+    updateTag("holidays");
+    revalidatePath("/policies");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to add holiday" };
+  }
+}
+
+// ----- Holiday delete (HR/admin) -----
+
+export async function deleteHoliday(id: string): Promise<ApprovalResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!canManageEmployees(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    const { error } = await supabase.from("holidays").delete().eq("id", id);
+    if (error) throw error;
+    updateTag("holidays");
+    revalidatePath("/policies");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to delete holiday" };
+  }
+}
+
+// ----- Leave type update days (HR/admin) -----
+
+export async function updateLeaveTypeDays(
+  id: string,
+  annualDays: number
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!canManageEmployees(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    if (annualDays < 0) return { ok: false, error: "Days must be non-negative" };
+    const { error } = await supabase
+      .from("leave_types")
+      .update({ annual_days: annualDays })
+      .eq("id", id);
+    if (error) throw error;
+    updateTag("leave-types");
+    revalidatePath("/policies");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to update leave type" };
+  }
+}

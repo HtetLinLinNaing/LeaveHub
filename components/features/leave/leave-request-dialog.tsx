@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createLeaveRequest } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,12 +23,11 @@ import { Plus } from "lucide-react";
 
 interface Props {
   leaveTypes: LeaveType[];
-  employeeId: string;
 }
 
-export function LeaveRequestDialog({ leaveTypes, employeeId }: Props) {
+export function LeaveRequestDialog({ leaveTypes }: Props) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -40,39 +39,23 @@ export function LeaveRequestDialog({ leaveTypes, employeeId }: Props) {
     reason: "",
   });
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      const supabase = createClient();
+    startTransition(async () => {
+      const result = await createLeaveRequest({
+        leave_type_id: form.leave_type_id,
+        start_date: form.start_date,
+        end_date: form.end_date,
+        duration_type: form.duration_type,
+        reason: form.reason,
+      });
 
-      // Calculate working days
-      const { data: days, error: calcError } = await supabase
-        .rpc("calculate_working_days", {
-          start_d: form.start_date,
-          end_d: form.end_date,
-        });
-
-      if (calcError) throw calcError;
-
-      const actualDays = form.duration_type === "half_day" ? 0.5 : days;
-
-      const { error: insertError } = await supabase
-        .from("leave_requests")
-        .insert({
-          employee_id: employeeId,
-          leave_type_id: form.leave_type_id,
-          start_date: form.start_date,
-          end_date: form.end_date,
-          days: actualDays,
-          duration_type: form.duration_type,
-          reason: form.reason,
-          status: "pending",
-        });
-
-      if (insertError) throw insertError;
+      if (!result.ok) {
+        setError(result.error ?? "Failed to submit request");
+        return;
+      }
 
       setOpen(false);
       setForm({
@@ -83,11 +66,7 @@ export function LeaveRequestDialog({ leaveTypes, employeeId }: Props) {
         reason: "",
       });
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit request");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -183,8 +162,8 @@ export function LeaveRequestDialog({ leaveTypes, employeeId }: Props) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Submitting..." : "Submit Request"}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Submitting..." : "Submit Request"}
             </Button>
           </div>
         </form>

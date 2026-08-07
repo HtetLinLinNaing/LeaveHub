@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { cancelLeaveRequest } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
@@ -45,17 +45,21 @@ function CancelButton({ id, onCancel, disabled }: { id: string; onCancel: (id: s
 
 export function LeaveRequestList({ requests }: { requests: Request[] }) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  async function handleCancel(id: string) {
+  function handleCancel(id: string) {
+    setError("");
     setCancellingId(id);
-    const supabase = createClient();
-    await supabase
-      .from("leave_requests")
-      .update({ status: "cancelled" })
-      .eq("id", id);
-    setCancellingId(null);
-    router.refresh();
+    startTransition(async () => {
+      const result = await cancelLeaveRequest(id);
+      if (!result.ok) {
+        setError(result.error ?? "Failed to cancel request");
+      }
+      setCancellingId(null);
+      router.refresh();
+    });
   }
 
   const columns: Column<Request>[] = [
@@ -64,15 +68,21 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
     { key: "days", header: "Days", cell: (r) => `${r.days}${r.duration_type === "half_day" ? " (½)" : ""}` },
     { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
     { key: "actions", header: "Actions", cell: (r) => (r.status === "pending" || r.status === "approved") ? (
-      <CancelButton id={r.id} onCancel={handleCancel} disabled={cancellingId === r.id} />
+      <CancelButton id={r.id} onCancel={handleCancel} disabled={pending && cancellingId === r.id} />
     ) : null },
   ];
 
   return (
-    <ResponsiveTable
-      columns={columns}
-      rows={requests}
-      keyOf={(r) => r.id}
+    <div className="space-y-3">
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      <ResponsiveTable
+        columns={columns}
+        rows={requests}
+        keyOf={(r) => r.id}
       mobileCard={(r) => (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -85,7 +95,7 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
           </div>
           {(r.status === "pending" || r.status === "approved") && (
             <div className="pt-1">
-              <CancelButton id={r.id} onCancel={handleCancel} disabled={cancellingId === r.id} />
+              <CancelButton id={r.id} onCancel={handleCancel} disabled={pending && cancellingId === r.id} />
             </div>
           )}
         </div>
@@ -95,6 +105,7 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
           No leave requests yet. Click &quot;Request Leave&quot; to create one.
         </div>
       }
-    />
+      />
+    </div>
   );
 }

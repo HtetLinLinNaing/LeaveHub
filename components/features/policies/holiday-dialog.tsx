@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { revalidateHolidays } from "@/lib/actions";
+import { createHoliday } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,33 +15,25 @@ import { Plus } from "lucide-react";
 
 export function HolidayDialog() {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
   const [form, setForm] = useState({ name: "", date: "" });
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      const supabase = createClient();
-      const { error: dbError } = await supabase
-        .from("holidays")
-        .insert({ name: form.name, date: form.date });
-
-      if (dbError) throw dbError;
-
+    startTransition(async () => {
+      const result = await createHoliday(form);
+      if (!result.ok) {
+        setError(result.error ?? "Failed to add holiday");
+        return;
+      }
       setOpen(false);
       setForm({ name: "", date: "" });
-      await revalidateHolidays();
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add holiday");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -82,8 +73,8 @@ export function HolidayDialog() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add Holiday"}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding..." : "Add Holiday"}
             </Button>
           </div>
         </form>

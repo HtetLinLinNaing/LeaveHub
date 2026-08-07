@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { revalidateLeaveTypes } from "@/lib/actions";
+import { updateLeaveTypeDays } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import type { LeaveType } from "@/lib/types";
@@ -13,27 +12,25 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDays, setEditDays] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
 
   function startEdit(lt: LeaveType) {
     setEditingId(lt.id);
     setEditDays(lt.annual_days);
   }
 
-  async function handleSave(id: string) {
-    setSaving(true);
-    try {
-      const supabase = createClient();
-      await supabase
-        .from("leave_types")
-        .update({ annual_days: editDays })
-        .eq("id", id);
-      await revalidateLeaveTypes();
-      router.refresh();
-    } finally {
-      setSaving(false);
+  function handleSave(id: string) {
+    setError("");
+    startTransition(async () => {
+      const result = await updateLeaveTypeDays(id, editDays);
+      if (!result.ok) {
+        setError(result.error ?? "Failed to update leave type");
+        return;
+      }
       setEditingId(null);
-    }
+      router.refresh();
+    });
   }
 
   function EditCell({ lt }: { lt: LeaveType }) {
@@ -46,7 +43,7 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
     }
     return (
       <div className="flex gap-1">
-        <Button size="sm" variant="ghost" onClick={() => handleSave(lt.id)} disabled={saving}>
+        <Button size="sm" variant="ghost" onClick={() => handleSave(lt.id)} disabled={pending}>
           <Save className="h-4 w-4" />
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
@@ -72,10 +69,16 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
   ];
 
   return (
-    <ResponsiveTable
-      columns={columns}
-      rows={leaveTypes}
-      keyOf={(lt) => lt.id}
+    <div className="space-y-3">
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      <ResponsiveTable
+        columns={columns}
+        rows={leaveTypes}
+        keyOf={(lt) => lt.id}
       mobileCard={(lt) => (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -100,6 +103,7 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
           </div>
         </div>
       )}
-    />
+      />
+    </div>
   );
 }
