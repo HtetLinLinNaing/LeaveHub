@@ -13,10 +13,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
+    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "tablet", use: { ...devices["iPad Mini"] } },
+    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
     command: "npm run dev",
