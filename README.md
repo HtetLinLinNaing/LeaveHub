@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LeaveHub
+
+Leave management system for small teams. Employees request leave, managers approve, HR manages policies and people.
+
+## Tech Stack
+
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+- **Backend:** Supabase (PostgreSQL, Auth, RLS)
+- **Testing:** Playwright
+
+## Features
+
+- **Leave Requests** — Submit, edit, cancel. Half-day support. Working days auto-calculated (excludes weekends + holidays).
+- **Approval Workflow** — Manager approves annual/medical leave. Compassionate leave routes through HR.
+- **Leave Balances** — Auto-deducted on approval. Carry-forward support.
+- **Employee Management** — HR creates employees, assigns roles/managers, auto-allocates leave balances.
+- **Policies** — Edit leave type allocations. Manage public holidays.
+- **Team Calendar** — Monthly view with holidays and approved leave.
+- **Role-Based Access** — Employee, Manager, HR, Admin. Sidebar nav adapts per role.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- Supabase project
+
+### Setup
+
+1. Clone and install:
+
+```bash
+git clone <repo-url>
+cd LeaveHub-V2
+npm install
+```
+
+2. Copy `.env.local.example` to `.env.local` and add your Supabase credentials:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+3. Run migrations in Supabase SQL Editor:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_seed_data.sql`
+
+4. Start dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Login with seed accounts:
+   - `alice@company.com` — HR
+   - `bob@company.com` — Manager
+   - `charlie@company.com` — Employee
+   - `diana@company.com` — Employee
+   - `eve@company.com` — Admin
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Supabase Migrations
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run in order via SQL Editor:
 
-## Learn More
+| File | Purpose |
+|------|---------|
+| `001_initial_schema.sql` | Tables, indexes, functions, dev RLS policies |
+| `002_seed_data.sql` | Sample users, employees, leave balances, holidays |
+| `003_add_auth_fk.sql` | Link users to Supabase Auth (when switching to Google OAuth) |
+| `004_strict_rls.sql` | Production RLS policies (when switching to Google OAuth) |
 
-To learn more about Next.js, take a look at the following resources:
+## Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/
+├── (auth)/login/          # Login page
+├── (dashboard)/           # Protected routes
+│   ├── page.tsx           # Dashboard (role-aware)
+│   ├── leave/             # Leave requests
+│   ├── approvals/         # Manager approval queue
+│   ├── employees/         # HR: employee management
+│   ├── policies/          # HR: leave types + holidays
+│   └── calendar/          # Team calendar
+├── api/auth/mock-login/   # Mock auth endpoint
+components/
+├── ui/                    # shadcn/ui components
+├── features/              # Feature components
+│   ├── leave/             # Leave request dialog + list
+│   ├── approvals/         # Approval list + actions
+│   ├── employees/         # Employee list + dialog
+│   ├── policies/          # Leave types + holiday management
+│   └── calendar/          # Team calendar grid
+├── shared/                # Sidebar, shared layouts
+lib/
+├── supabase/              # Supabase client (server + browser)
+├── auth.ts                # Mock auth utilities
+├── types.ts               # TypeScript types
+├── validations.ts         # Zod schemas
+└── constants.ts           # Roles, status colors
+supabase/migrations/       # SQL migration files
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Auth
 
-## Deploy on Vercel
+Currently using mock auth (cookie-based session). To switch to Google OAuth:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Configure Google provider in Supabase Dashboard > Authentication > Providers
+2. Run `003_add_auth_fk.sql` to add FK constraint
+3. Run `004_strict_rls.sql` to enable production RLS policies
+4. Replace mock auth with Supabase Auth in `lib/auth.ts`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Deploy to Vercel:
+
+```bash
+npx vercel
+```
+
+Set environment variables in Vercel project settings:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+## License
+
+Private — internal use only.
