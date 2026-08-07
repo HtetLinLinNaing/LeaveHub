@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { revalidateHolidays } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +36,7 @@ export function HolidayDialog() {
 
       setOpen(false);
       setForm({ name: "", date: "" });
+      await revalidateHolidays();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add holiday");

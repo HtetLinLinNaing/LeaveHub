@@ -59,6 +59,21 @@ export function TeamCalendar({
     return map;
   }, [holidays]);
 
+  const leaveByDate = useMemo(() => {
+    const map = new Map<string, LeaveRequest[]>();
+    for (const lr of leaveRequests) {
+      const start = new Date(lr.start_date);
+      const end = new Date(lr.end_date);
+      for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+        const key = format(d, "yyyy-MM-dd");
+        const bucket = map.get(key);
+        if (bucket) bucket.push(lr);
+        else map.set(key, [lr]);
+      }
+    }
+    return map;
+  }, [leaveRequests]);
+
   const employeeColorMap = useMemo(() => {
     const map = new Map<string, string>();
     let i = 0;
@@ -71,13 +86,6 @@ export function TeamCalendar({
     });
     return map;
   }, [leaveRequests]);
-
-  function getLeaveForDate(date: Date): LeaveRequest[] {
-    const dateStr = format(date, "yyyy-MM-dd");
-    return leaveRequests.filter((lr) => {
-      return lr.start_date <= dateStr && lr.end_date >= dateStr;
-    });
-  }
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -93,6 +101,7 @@ export function TeamCalendar({
           variant="ghost"
           size="sm"
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          aria-label="Previous month"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -103,6 +112,7 @@ export function TeamCalendar({
           variant="ghost"
           size="sm"
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          aria-label="Next month"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -124,7 +134,7 @@ export function TeamCalendar({
           const weekend = isWeekend(day);
           const dateStr = format(day, "yyyy-MM-dd");
           const holiday = holidayMap.get(dateStr);
-          const leave = getLeaveForDate(day);
+          const leave = leaveByDate.get(dateStr) ?? [];
           const isToday = isSameDay(day, new Date());
 
           return (

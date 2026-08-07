@@ -16,7 +16,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useSidebar } from "@/components/shared/sidebar-context";
+import { useSidebar, useSidebarIsOpen } from "@/components/shared/sidebar-context";
 
 interface NavItem {
   label: string;
@@ -93,7 +93,8 @@ function SidebarContent({ role, email }: { role: Role; email: string }) {
 }
 
 export function Sidebar({ role, email }: { role: Role; email: string }) {
-  const { isOpen, close } = useSidebar();
+  const isOpen = useSidebarIsOpen();
+  const { close } = useSidebar();
   const pathname = usePathname();
 
   // Close drawer on navigation

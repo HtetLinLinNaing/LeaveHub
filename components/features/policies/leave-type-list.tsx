@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { revalidateLeaveTypes } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import type { LeaveType } from "@/lib/types";
@@ -21,14 +22,18 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
 
   async function handleSave(id: string) {
     setSaving(true);
-    const supabase = createClient();
-    await supabase
-      .from("leave_types")
-      .update({ annual_days: editDays })
-      .eq("id", id);
-    setEditingId(null);
-    setSaving(false);
-    router.refresh();
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("leave_types")
+        .update({ annual_days: editDays })
+        .eq("id", id);
+      await revalidateLeaveTypes();
+      router.refresh();
+    } finally {
+      setSaving(false);
+      setEditingId(null);
+    }
   }
 
   function EditCell({ lt }: { lt: LeaveType }) {

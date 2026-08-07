@@ -10,6 +10,7 @@ import { Check, X } from "lucide-react";
 
 interface ApprovalRequest {
   id: string;
+  leave_type_id: string;
   start_date: string;
   end_date: string;
   days: number;
@@ -18,6 +19,7 @@ interface ApprovalRequest {
   status: string;
   created_at: string;
   employees: {
+    id: string;
     first_name: string;
     last_name: string;
     employee_code: string;
@@ -36,47 +38,59 @@ interface Props {
 export function ApprovalList({ requests, approverId, approverRole }: Props) {
   const router = useRouter();
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   async function handleAction(id: string, action: "approved" | "rejected") {
     setProcessingId(id);
+    setError("");
     const supabase = createClient();
 
-    const update: Record<string, unknown> = {
-      status: action,
-      approved_by: approverId,
-      approved_at: new Date().toISOString(),
-    };
+    try {
+      const update: Record<string, unknown> = {
+        status: action,
+        approved_by: approverId,
+        approved_at: new Date().toISOString(),
+      };
 
-    await supabase
-      .from("leave_requests")
-      .update(update)
-      .eq("id", id);
+      const { error: updateError } = await supabase
+        .from("leave_requests")
+        .update(update)
+        .eq("id", id);
 
-    // If approved, update leave balance
-    if (action === "approved") {
-      const req = requests.find((r) => r.id === id);
-      if (req) {
-        // Get current balance
-        const { data: balance } = await supabase
-          .from("leave_balances")
-          .select("id, used_days, remaining_days")
-          .eq("employee_id", req.employees.manager_id ? approverId : "")
-          .single();
+      if (updateError) throw updateError;
 
-        if (balance) {
-          await supabase
+      // If approved, decrement the requester's leave balance
+      if (action === "approved") {
+        const req = requests.find((r) => r.id === id);
+        if (req) {
+          const { data: balance } = await supabase
             .from("leave_balances")
-            .update({
-              used_days: balance.used_days + req.days,
-              remaining_days: balance.remaining_days - req.days,
-            })
-            .eq("id", balance.id);
+            .select("id, used_days, remaining_days")
+            .eq("employee_id", req.employees.id)
+            .eq("leave_type_id", req.leave_type_id)
+            .eq("year", new Date(req.start_date).getFullYear())
+            .maybeSingle();
+
+          if (balance) {
+            const { error: balanceError } = await supabase
+              .from("leave_balances")
+              .update({
+                used_days: balance.used_days + req.days,
+                remaining_days: balance.remaining_days - req.days,
+              })
+              .eq("id", balance.id);
+
+            if (balanceError) throw balanceError;
+          }
         }
       }
-    }
 
-    setProcessingId(null);
-    router.refresh();
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update request");
+    } finally {
+      setProcessingId(null);
+    }
   }
 
   if (requests.length === 0) {
@@ -89,6 +103,11 @@ export function ApprovalList({ requests, approverId, approverRole }: Props) {
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
       {requests.map((req) => (
         <div
           key={req.id}

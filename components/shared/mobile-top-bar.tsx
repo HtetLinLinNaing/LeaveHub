@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/shared/sidebar-context"
 
 export function MobileTopBar() {
-  const { open } = useSidebar()
+  const { open } = useSidebar();
 
   return (
     <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden">
@@ -20,5 +20,5 @@ export function MobileTopBar() {
       </Button>
       <span className="font-bold">LeaveHub</span>
     </div>
-  )
+  );
 }

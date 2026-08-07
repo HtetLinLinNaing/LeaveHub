@@ -13,7 +13,7 @@ export default async function ApprovalsPage() {
     .from("leave_requests")
     .select(`
       *,
-      employees!inner(first_name, last_name, employee_code, department, manager_id),
+      employees!inner(id, first_name, last_name, employee_code, department, manager_id),
       leave_types(name)
     `)
     .eq("status", "pending")

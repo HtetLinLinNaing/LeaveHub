@@ -22,7 +22,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ user });
 }
-
-export async function DELETE() {
-  return NextResponse.json({ ok: true });
-}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { revalidateHolidays } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import { format } from "date-fns";
@@ -15,10 +16,14 @@ export function HolidayList({ holidays }: { holidays: Holiday[] }) {
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    const supabase = createClient();
-    await supabase.from("holidays").delete().eq("id", id);
-    setDeletingId(null);
-    router.refresh();
+    try {
+      const supabase = createClient();
+      await supabase.from("holidays").delete().eq("id", id);
+      await revalidateHolidays();
+      router.refresh();
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   const columns: Column<Holiday>[] = [
