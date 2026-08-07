@@ -11,14 +11,22 @@ export default async function LeavePage() {
   const supabase = await createClient();
   const { employee } = await getCurrentEmployee(supabase, session?.email);
 
-  const [leaveTypes, { data: balances }, { data: requests }] =
+  const year = new Date().getFullYear();
+
+  // Only show leave types the employee is opted into (e.g. Compassionate
+  // requires explicit HR opt-in).
+  const [{ data: policies }, { data: balances }, { data: requests }] =
     await Promise.all([
-      getCachedLeaveTypes(),
+      supabase
+        .from("employee_leave_policies")
+        .select("leave_types(*)")
+        .eq("employee_id", employee?.id ?? "")
+        .eq("enabled", true),
       supabase
         .from("leave_balances")
         .select("*, leave_types(name)")
         .eq("employee_id", employee?.id)
-        .eq("year", new Date().getFullYear()),
+        .eq("year", year),
       supabase
         .from("leave_requests")
         .select("*, leave_types(name)")
@@ -26,11 +34,15 @@ export default async function LeavePage() {
         .order("created_at", { ascending: false }),
     ]);
 
+  const enabledLeaveTypes = (policies ?? [])
+    .map((p) => (Array.isArray(p.leave_types) ? p.leave_types[0] : p.leave_types))
+    .filter((lt): lt is import("@/lib/types").LeaveType => Boolean(lt));
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">My Leave</h1>
-        <LeaveRequestDialog leaveTypes={leaveTypes ?? []} />
+        <LeaveRequestDialog leaveTypes={enabledLeaveTypes} />
       </div>
 
       {/* Balance cards */}

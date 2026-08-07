@@ -125,11 +125,12 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
       return { ok: false, error: "Not authorized" };
     }
 
-    // Generate employee code from current count
-    const { count } = await supabase
-      .from("employees")
-      .select("*", { count: "exact", head: true });
-    const code = `EMP${String((count ?? 0) + 1).padStart(3, "0")}`;
+    // Generate employee code from current count + fetch leave types in parallel.
+    const [countRes, leaveTypesRes] = await Promise.all([
+      supabase.from("employees").select("*", { count: "exact", head: true }),
+      supabase.from("leave_types").select("id, annual_days, name"),
+    ]);
+    const code = `EMP${String((countRes.count ?? 0) + 1).padStart(3, "0")}`;
 
     // Create user
     const { data: created, error: userError } = await supabase
@@ -156,29 +157,28 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
       .single();
     if (empError) throw empError;
 
-    // Seed leave balances for current year
-    const { data: leaveTypes } = await supabase
-      .from("leave_types")
-      .select("id, annual_days")
-      .gt("annual_days", 0);
-
-    if (leaveTypes && leaveTypes.length > 0) {
-      const year = new Date().getFullYear();
-      const { error: balError } = await supabase.from("leave_balances").insert(
-        leaveTypes.map((lt) => ({
-          employee_id: employee.id,
-          leave_type_id: lt.id,
-          year,
-          allocated_days: lt.annual_days,
-          used_days: 0,
-          remaining_days: lt.annual_days,
-          carry_forward_days: 0,
-        }))
-      );
-      if (balError) throw balError;
+    // Seed per-employee leave policies. Compassionate is excluded by default —
+    // HR opts in selected employees from the Policies page.
+    const leaveTypes = leaveTypesRes.data ?? [];
+    const defaultEnabled = leaveTypes.filter(
+      (lt) => lt.name !== "Compassionate Leave"
+    );
+    if (defaultEnabled.length > 0) {
+      const { error: polError } = await supabase
+        .from("employee_leave_policies")
+        .insert(
+          defaultEnabled.map((lt) => ({
+            employee_id: employee.id,
+            leave_type_id: lt.id,
+            allocated_days: lt.annual_days,
+            enabled: true,
+          }))
+        );
+      if (polError) throw polError;
     }
 
     revalidatePath("/employees");
+    updateTag("current-employee");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to create employee" };
@@ -205,6 +205,17 @@ export async function createLeaveRequest(
     // Server-side date validation
     if (input.start_date > input.end_date) {
       return { ok: false, error: "Start date must be on or before end date" };
+    }
+
+    // Enforce per-employee policy: only types the employee is opted into.
+    const { data: policy } = await supabase
+      .from("employee_leave_policies")
+      .select("enabled")
+      .eq("employee_id", employee.id)
+      .eq("leave_type_id", input.leave_type_id)
+      .maybeSingle();
+    if (!policy || !policy.enabled) {
+      return { ok: false, error: "You are not entitled to this leave type" };
     }
 
     const { data: days, error: calcError } = await supabase.rpc(

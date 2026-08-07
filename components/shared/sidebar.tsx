@@ -15,6 +15,8 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ROLE_LABELS } from "@/lib/constants";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useSidebar, useSidebarIsOpen } from "@/components/shared/sidebar-context";
 
@@ -79,7 +81,10 @@ function SidebarContent({ role, email }: { role: Role; email: string }) {
       </nav>
 
       <div className="border-t p-3">
-        <div className="mb-2 px-3 text-xs text-gray-500">{email}</div>
+        <div className="mb-1 px-3 text-xs text-gray-500">{email}</div>
+        <div className="mb-2 px-3">
+          <Badge variant="outline" className="text-[10px]">{ROLE_LABELS[role]}</Badge>
+        </div>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"

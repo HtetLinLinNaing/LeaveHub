@@ -44,7 +44,8 @@ export default async function DashboardPage() {
       .select("employees(first_name, last_name)")
       .eq("status", "approved")
       .lte("start_date", today)
-      .gte("end_date", today),
+      .gte("end_date", today)
+      .limit(50),
   ]);
 
   return (

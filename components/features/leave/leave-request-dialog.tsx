@@ -25,19 +25,29 @@ interface Props {
   leaveTypes: LeaveType[];
 }
 
+const EMPTY_FORM = {
+  leave_type_id: "",
+  start_date: "",
+  end_date: "",
+  duration_type: "full_day" as "full_day" | "half_day",
+  reason: "",
+};
+
 export function LeaveRequestDialog({ leaveTypes }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    leave_type_id: "",
-    start_date: "",
-    end_date: "",
-    duration_type: "full_day" as "full_day" | "half_day",
-    reason: "",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) {
+      setForm(EMPTY_FORM);
+      setError("");
+    }
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,19 +68,13 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
       }
 
       setOpen(false);
-      setForm({
-        leave_type_id: "",
-        start_date: "",
-        end_date: "",
-        duration_type: "full_day",
-        reason: "",
-      });
+      setForm(EMPTY_FORM);
       router.refresh();
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
         <Plus className="mr-2 h-4 w-4" />
         Request Leave
@@ -158,7 +162,7 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>

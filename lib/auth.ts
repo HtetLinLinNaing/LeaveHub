@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Role } from "./types";
 
@@ -58,24 +59,49 @@ export const getSessionFromRequest = cache(
 // Per-request memoized user + employee lookup. Returns role from the users
 // table — never from the cookie. Replaces the duplicated `users` + `employees`
 // query pair in every dashboard page.
+const getCurrentEmployeeUncached = async (
+  supabase: SupabaseClient,
+  email: string | undefined
+): Promise<CurrentEmployee> => {
+  if (!email) return { user: null, employee: null };
+  // Single round-trip with a join instead of 2 sequential selects.
+  const { data } = await supabase
+    .from("users")
+    .select("id, role, employees(id, first_name, last_name, department)")
+    .eq("email", email)
+    .single();
+  if (!data) return { user: null, employee: null };
+  const employee = (data as unknown as {
+    employees: CurrentEmployee["employee"] | CurrentEmployee["employee"][];
+  }).employees;
+  return {
+    user: { id: data.id, role: data.role as Role },
+    employee: Array.isArray(employee) ? (employee[0] ?? null) : (employee ?? null),
+  };
+};
+
+// Cross-request cache keyed by email. The cookie is the only thing that
+// ever triggers a re-lookup, and cookies change at the network layer — so
+// a 5s TTL absorbs the burst of navigation calls without serving stale role.
+const _getCurrentEmployeeCached = unstable_cache(
+  async (email: string) => {
+    // Re-create the supabase client inside the cache so the closure
+    // doesn't pin a stale request-scoped instance.
+    const { createClient } = await import("@/lib/supabase/admin");
+    const supabase = createClient();
+    return getCurrentEmployeeUncached(supabase, email);
+  },
+  ["current-employee"],
+  { revalidate: 5, tags: ["current-employee"] }
+);
+
 export const getCurrentEmployee = cache(
   async (
     supabase: SupabaseClient,
     email: string | undefined
   ): Promise<CurrentEmployee> => {
     if (!email) return { user: null, employee: null };
-    const { data: user } = await supabase
-      .from("users")
-      .select("id, role")
-      .eq("email", email)
-      .single();
-    if (!user) return { user: null, employee: null };
-    const { data: employee } = await supabase
-      .from("employees")
-      .select("id, first_name, last_name, department")
-      .eq("user_id", user.id)
-      .single();
-    return { user, employee };
+    return _getCurrentEmployeeCached(email);
   }
 );
 
