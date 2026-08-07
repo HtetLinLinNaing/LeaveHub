@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCachedLeaveTypes } from "@/lib/cache";
 import { LeaveRequestList } from "@/components/features/leave/leave-request-list";
 import { LeaveRequestDialog } from "@/components/features/leave/leave-request-dialog";
 
@@ -10,9 +11,9 @@ export default async function LeavePage() {
   const supabase = await createClient();
   const { employee } = await getCurrentEmployee(supabase, session?.email);
 
-  const [{ data: leaveTypes }, { data: balances }, { data: requests }] =
+  const [leaveTypes, { data: balances }, { data: requests }] =
     await Promise.all([
-      supabase.from("leave_types").select("*").order("name"),
+      getCachedLeaveTypes(),
       supabase
         .from("leave_balances")
         .select("*, leave_types(name)")

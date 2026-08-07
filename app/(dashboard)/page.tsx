@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCachedHolidaysFromDate } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_COLORS } from "@/lib/constants";
@@ -18,7 +19,7 @@ export default async function DashboardPage() {
     { data: balances },
     { count: pendingCount },
     { data: recentRequests },
-    { data: holidays },
+    holidays,
     { data: awayToday },
   ] = await Promise.all([
     supabase
@@ -37,12 +38,7 @@ export default async function DashboardPage() {
       .eq("employee_id", employee?.id ?? "")
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("holidays")
-      .select("*")
-      .gte("date", today)
-      .order("date")
-      .limit(3),
+    getCachedHolidaysFromDate(today, 3),
     supabase
       .from("leave_requests")
       .select("employees(first_name, last_name)")

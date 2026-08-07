@@ -1,20 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCachedLeaveTypes, getCachedHolidays } from "@/lib/cache";
 import { LeaveTypeList } from "@/components/features/policies/leave-type-list";
 import { HolidayList } from "@/components/features/policies/holiday-list";
 import { HolidayDialog } from "@/components/features/policies/holiday-dialog";
 
 export default async function PoliciesPage() {
-  const supabase = await createClient();
-
-  const { data: leaveTypes } = await supabase
-    .from("leave_types")
-    .select("*")
-    .order("name");
-
-  const { data: holidays } = await supabase
-    .from("holidays")
-    .select("*")
-    .order("date");
+  const [leaveTypes, holidays] = await Promise.all([
+    getCachedLeaveTypes(),
+    getCachedHolidays(),
+  ]);
 
   return (
     <div>
