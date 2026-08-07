@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import type { Holiday } from "@/lib/types";
@@ -20,45 +21,37 @@ export function HolidayList({ holidays }: { holidays: Holiday[] }) {
     router.refresh();
   }
 
-  if (holidays.length === 0) {
-    return (
-      <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
-        No holidays configured.
-      </div>
-    );
-  }
+  const columns: Column<Holiday>[] = [
+    { key: "name", header: "Holiday", cell: (h) => h.name },
+    { key: "date", header: "Date", cell: (h) => format(new Date(h.date), "MMM d, yyyy") },
+    { key: "actions", header: "Actions", cell: (h) => (
+      <Button size="sm" variant="ghost" onClick={() => handleDelete(h.id)} disabled={deletingId === h.id}>
+        <Trash2 className="h-4 w-4 text-red-500" />
+      </Button>
+    ) },
+  ];
 
   return (
-    <div className="rounded-lg border bg-white">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-gray-50 text-left">
-            <th className="px-4 py-3 font-medium">Holiday</th>
-            <th className="px-4 py-3 font-medium">Date</th>
-            <th className="px-4 py-3 font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {holidays.map((h) => (
-            <tr key={h.id} className="border-b last:border-0">
-              <td className="px-4 py-3">{h.name}</td>
-              <td className="px-4 py-3">
-                {format(new Date(h.date), "MMM d, yyyy")}
-              </td>
-              <td className="px-4 py-3">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleDelete(h.id)}
-                  disabled={deletingId === h.id}
-                >
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ResponsiveTable
+      columns={columns}
+      rows={holidays}
+      keyOf={(h) => h.id}
+      mobileCard={(h) => (
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="font-medium">{h.name}</div>
+            <div className="text-sm text-gray-500">{format(new Date(h.date), "MMM d, yyyy")}</div>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => handleDelete(h.id)} disabled={deletingId === h.id}>
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
+      )}
+      empty={
+        <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
+          No holidays configured.
+        </div>
+      }
+    />
   );
 }
