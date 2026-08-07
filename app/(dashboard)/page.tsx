@@ -20,7 +20,6 @@ export default async function DashboardPage() {
     { count: pendingCount },
     { data: recentRequests },
     holidays,
-    { data: awayToday },
   ] = await Promise.all([
     supabase
       .from("leave_balances")
@@ -39,13 +38,6 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
     getCachedHolidaysFromDate(today, 3),
-    supabase
-      .from("leave_requests")
-      .select("employees(first_name, last_name)")
-      .eq("status", "approved")
-      .lte("start_date", today)
-      .gte("end_date", today)
-      .limit(50),
   ]);
 
   return (
@@ -80,17 +72,6 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{pendingCount ?? 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Away Today
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{awayToday?.length ?? 0}</div>
           </CardContent>
         </Card>
       </div>

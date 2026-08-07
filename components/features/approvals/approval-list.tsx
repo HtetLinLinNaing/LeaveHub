@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Check, X } from "lucide-react";
+import type { Role } from "@/lib/types";
 
 interface ApprovalRequest {
   id: string;
@@ -24,16 +25,25 @@ interface ApprovalRequest {
     last_name: string;
     employee_code: string;
     department: string;
-    manager_id: string;
-  };
-  leave_types: { name: string } | null;
+    manager_id: string | null;
+  } | {
+    id: string;
+    first_name: string;
+    last_name: string;
+    employee_code: string;
+    department: string;
+    manager_id: string | null;
+  }[];
+  leave_types: { name: string } | { name: string }[] | null;
 }
 
 interface Props {
   requests: ApprovalRequest[];
+  managerNameById: Record<string, string>;
+  viewerRole: Role;
 }
 
-export function ApprovalList({ requests }: Props) {
+export function ApprovalList({ requests, managerNameById, viewerRole }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -55,7 +65,9 @@ export function ApprovalList({ requests }: Props) {
   if (requests.length === 0) {
     return (
       <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
-        No pending approvals.
+        {viewerRole === "employee"
+          ? "Employees don't approve leave. Talk to your manager or HR."
+          : "No pending approvals."}
       </div>
     );
   }
@@ -67,56 +79,67 @@ export function ApprovalList({ requests }: Props) {
           {error}
         </div>
       )}
-      {requests.map((req) => (
-        <div
-          key={req.id}
-          className="rounded-lg border bg-white p-4"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">
-                  {req.employees.first_name} {req.employees.last_name}
-                </span>
-                <Badge variant="outline">{req.employees.employee_code}</Badge>
-                <Badge variant="outline">{req.employees.department}</Badge>
+      {requests.map((req) => {
+        const emp = Array.isArray(req.employees) ? req.employees[0] : req.employees;
+        const lt = Array.isArray(req.leave_types)
+          ? (req.leave_types[0] ?? null)
+          : req.leave_types;
+        const managerName = emp?.manager_id ? managerNameById[emp.manager_id] : undefined;
+        if (!emp) return null;
+        return (
+          <div key={req.id} className="rounded-lg border bg-white p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">
+                    {emp.first_name} {emp.last_name}
+                  </span>
+                  <Badge variant="outline">{emp.employee_code}</Badge>
+                  <Badge variant="outline">{emp.department}</Badge>
+                </div>
+                <p className="mt-1 text-sm text-gray-700">
+                  {lt?.name} — {req.days} day(s)
+                  {req.duration_type === "half_day" ? " (half day)" : ""}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {format(new Date(req.start_date), "MMM d, yyyy")}
+                  {req.start_date !== req.end_date &&
+                    ` — ${format(new Date(req.end_date), "MMM d, yyyy")}`}
+                </p>
+                <p className="mt-2 text-sm">{req.reason}</p>
+                <p className="mt-2 text-xs text-gray-500">
+                  Reporting manager:{" "}
+                  <span className="font-medium text-gray-700">
+                    {managerName ?? "—"}
+                  </span>
+                </p>
               </div>
-              <p className="mt-1 text-sm text-gray-500">
-                {req.leave_types?.name} — {req.days} day(s)
-                {req.duration_type === "half_day" ? " (half day)" : ""}
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                {format(new Date(req.start_date), "MMM d, yyyy")}
-                {req.start_date !== req.end_date &&
-                  ` — ${format(new Date(req.end_date), "MMM d, yyyy")}`}
-              </p>
-              <p className="mt-2 text-sm">{req.reason}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-green-600 hover:bg-green-50"
-                onClick={() => handleAction(req.id, "approved")}
-                disabled={pending && processingId === req.id}
-              >
-                <Check className="mr-1 h-4 w-4" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-red-600 hover:bg-red-50"
-                onClick={() => handleAction(req.id, "rejected")}
-                disabled={pending && processingId === req.id}
-              >
-                <X className="mr-1 h-4 w-4" />
-                Reject
-              </Button>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-600 hover:bg-green-50"
+                  onClick={() => handleAction(req.id, "approved")}
+                  disabled={pending && processingId === req.id}
+                >
+                  <Check className="mr-1 h-4 w-4" />
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 hover:bg-red-50"
+                  onClick={() => handleAction(req.id, "rejected")}
+                  disabled={pending && processingId === req.id}
+                >
+                  <X className="mr-1 h-4 w-4" />
+                  Reject
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -33,14 +33,24 @@ interface LeaveRequest {
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const LEAVE_COLORS = [
-  "bg-blue-100 text-blue-800",
-  "bg-green-100 text-green-800",
-  "bg-purple-100 text-purple-800",
-  "bg-orange-100 text-orange-800",
-  "bg-pink-100 text-pink-800",
-  "bg-teal-100 text-teal-800",
+// Color per leave type name. Stable, deterministic — same type always same
+// color across all users and the whole year.
+const LEAVE_TYPE_COLORS: Record<string, string> = {
+  "Annual Leave": "bg-blue-100 text-blue-800 ring-blue-300",
+  "Medical Leave": "bg-green-100 text-green-800 ring-green-300",
+  "Compassionate Leave": "bg-purple-100 text-purple-800 ring-purple-300",
+};
+
+const FALLBACK_LEAVE_COLORS = [
+  "bg-orange-100 text-orange-800 ring-orange-300",
+  "bg-pink-100 text-pink-800 ring-pink-300",
+  "bg-teal-100 text-teal-800 ring-teal-300",
+  "bg-amber-100 text-amber-800 ring-amber-300",
 ];
+
+function colorForType(name: string, index: number): string {
+  return LEAVE_TYPE_COLORS[name] ?? FALLBACK_LEAVE_COLORS[index % FALLBACK_LEAVE_COLORS.length];
+}
 
 export function TeamCalendar({
   holidays,
@@ -74,14 +84,15 @@ export function TeamCalendar({
     return map;
   }, [leaveRequests]);
 
-  const employeeColorMap = useMemo(() => {
+  // Stable color per leave type name (not per employee). Build a name → index
+  // map on first encounter so the same type always gets the same color.
+  const typeColorMap = useMemo(() => {
     const map = new Map<string, string>();
-    let i = 0;
+    let fallbackIdx = 0;
     leaveRequests.forEach((lr) => {
-      const key = `${lr.employees.first_name} ${lr.employees.last_name}`;
-      if (!map.has(key)) {
-        map.set(key, LEAVE_COLORS[i % LEAVE_COLORS.length]);
-        i++;
+      const name = lr.leave_types.name;
+      if (!map.has(name)) {
+        map.set(name, colorForType(name, fallbackIdx++));
       }
     });
     return map;
@@ -162,12 +173,13 @@ export function TeamCalendar({
               )}
               {leave.slice(0, 2).map((lr) => {
                 const name = `${lr.employees.first_name} ${lr.employees.last_name}`;
-                const color = employeeColorMap.get(name) ?? LEAVE_COLORS[0];
+                const typeName = lr.leave_types.name;
+                const color = typeColorMap.get(typeName) ?? colorForType(typeName, 0);
                 return (
                   <div
                     key={lr.id}
-                    className={`mb-0.5 truncate rounded px-1 py-0.5 text-[10px] ${color}`}
-                    title={`${name} — ${lr.leave_types.name}`}
+                    className={`mb-0.5 truncate rounded px-1 py-0.5 text-[10px] ring-1 ${color}`}
+                    title={`${name} — ${typeName}`}
                   >
                     {name}
                   </div>

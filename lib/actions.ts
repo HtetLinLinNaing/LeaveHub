@@ -218,6 +218,20 @@ export async function createLeaveRequest(
       return { ok: false, error: "You are not entitled to this leave type" };
     }
 
+    // Reject overlapping pending/approved leave for the same employee.
+    // Two ranges [a,b] and [c,d] overlap iff a <= d AND c <= b.
+    const { data: overlap } = await supabase
+      .from("leave_requests")
+      .select("id, start_date, end_date")
+      .eq("employee_id", employee.id)
+      .in("status", ["pending", "approved"])
+      .lte("start_date", input.end_date)
+      .gte("end_date", input.start_date)
+      .limit(1);
+    if (overlap && overlap.length > 0) {
+      return { ok: false, error: "You already have a leave request overlapping these dates" };
+    }
+
     const { data: days, error: calcError } = await supabase.rpc(
       "calculate_working_days",
       { start_d: input.start_date, end_d: input.end_date }

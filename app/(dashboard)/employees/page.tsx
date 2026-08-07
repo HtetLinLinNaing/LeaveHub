@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/admin";
 import { EmployeeList } from "@/components/features/employees/employee-list";
 import { EmployeeDialog, type Manager } from "@/components/features/employees/employee-dialog";
+import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
+import { cookies } from "next/headers";
 import type { Role } from "@/lib/types";
 
 interface ManagerRow {
@@ -17,6 +19,9 @@ function normalizeManager(row: ManagerRow): Manager {
 
 export default async function EmployeesPage() {
   const supabase = await createClient();
+  const cookieStore = await cookies();
+  const session = getSessionFromRequest(cookieStore.toString());
+  const { employee: currentEmployee } = await getCurrentEmployee(supabase, session?.email);
 
   const [employeesRes, managersRes] = await Promise.all([
     supabase
@@ -39,7 +44,10 @@ export default async function EmployeesPage() {
         <h1 className="text-2xl font-bold">Employees</h1>
         <EmployeeDialog managers={managers} />
       </div>
-      <EmployeeList employees={employeesRes.data ?? []} />
+      <EmployeeList
+        employees={employeesRes.data ?? []}
+        currentEmployeeId={currentEmployee?.id}
+      />
     </div>
   );
 }
