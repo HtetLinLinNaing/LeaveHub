@@ -12,6 +12,7 @@ type Props<T> = {
   rows: T[]
   keyOf: (row: T) => string
   mobileCard: (row: T) => React.ReactNode
+  rowClassName?: (row: T) => string
   empty?: React.ReactNode
 }
 
@@ -20,6 +21,7 @@ export function ResponsiveTable<T>({
   rows,
   keyOf,
   mobileCard,
+  rowClassName,
   empty,
 }: Props<T>) {
   if (rows.length === 0) {
@@ -43,7 +45,7 @@ export function ResponsiveTable<T>({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={keyOf(row)} className="border-b last:border-0">
+              <tr key={keyOf(row)} className={`border-b last:border-0 ${rowClassName?.(row) ?? ""}`}>
                 {columns.map((c) => (
                   <td key={c.key} className={`px-4 py-3 ${c.className ?? ""}`}>
                     {c.cell(row)}
@@ -57,7 +59,7 @@ export function ResponsiveTable<T>({
 
       <div className="divide-y overflow-hidden rounded-lg border bg-white sm:hidden">
         {rows.map((row) => (
-          <div key={keyOf(row)} className="p-4">
+          <div key={keyOf(row)} className={`p-4 ${rowClassName?.(row) ?? ""}`}>
             {mobileCard(row)}
           </div>
         ))}
