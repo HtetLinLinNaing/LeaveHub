@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createLeaveRequest } from "@/lib/actions";
@@ -73,6 +74,11 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
     });
   }
 
+  const leaveTypeItems = React.useMemo(
+    () => Object.fromEntries(leaveTypes.map((lt) => [lt.id, lt.name])),
+    [leaveTypes]
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
@@ -87,8 +93,9 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
           <div>
             <label className="mb-1 block text-sm font-medium">Leave Type</label>
             <Select
+              items={leaveTypeItems}
               value={form.leave_type_id}
-              onValueChange={(v) => setForm({ ...form, leave_type_id: v ?? "" })}
+              onValueChange={(v) => setForm({ ...form, leave_type_id: (v as string) ?? "" })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select leave type" />
@@ -129,9 +136,10 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
           <div>
             <label className="mb-1 block text-sm font-medium">Duration</label>
             <Select
+              items={{ full_day: "Full Day", half_day: "Half Day" }}
               value={form.duration_type}
               onValueChange={(v) =>
-                setForm({ ...form, duration_type: v as "full_day" | "half_day" })
+                setForm({ ...form, duration_type: (v as "full_day" | "half_day") ?? "full_day" })
               }
             >
               <SelectTrigger>

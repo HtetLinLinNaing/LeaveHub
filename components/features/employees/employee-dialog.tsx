@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createEmployee } from "@/lib/actions";
@@ -86,6 +87,19 @@ export function EmployeeDialog({ managers }: Props) {
     });
   }
 
+  const roleItems = React.useMemo(
+    () => Object.fromEntries(ROLES.map((r) => [r, ROLE_LABELS[r]])),
+    []
+  );
+
+  const managerItems = React.useMemo(() => {
+    const items: Record<string, string> = { "": "None" };
+    for (const m of managers) {
+      items[m.id] = `${m.first_name} ${m.last_name} (${ROLE_LABELS[m.role]})`;
+    }
+    return items;
+  }, [managers]);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
@@ -146,8 +160,9 @@ export function EmployeeDialog({ managers }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">Role</label>
               <Select
+                items={roleItems}
                 value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: v ?? "employee" })}
+                onValueChange={(v) => setForm({ ...form, role: (v as Role) ?? "employee" })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -164,8 +179,9 @@ export function EmployeeDialog({ managers }: Props) {
             <div>
               <label className="mb-1 block text-sm font-medium">Manager</label>
               <Select
+                items={managerItems}
                 value={form.manager_id}
-                onValueChange={(v) => setForm({ ...form, manager_id: v ?? "" })}
+                onValueChange={(v) => setForm({ ...form, manager_id: (v as string) ?? "" })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="None" />
@@ -173,7 +189,7 @@ export function EmployeeDialog({ managers }: Props) {
                 <SelectContent>
                   {managers.map((m) => (
                     <SelectItem key={m.id} value={m.id}>
-                      {m.first_name} {m.last_name}
+                      {m.first_name} {m.last_name} ({ROLE_LABELS[m.role]})
                     </SelectItem>
                   ))}
                 </SelectContent>
