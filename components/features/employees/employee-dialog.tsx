@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createEmployee } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +21,7 @@ import {
 import { ROLES } from "@/lib/constants";
 import { ROLE_LABELS } from "@/lib/constants";
 import { Plus } from "lucide-react";
+import type { Role } from "@/lib/types";
 
 interface Props {
   managers: { id: string; first_name: string; last_name: string }[];
@@ -28,7 +29,7 @@ interface Props {
 
 export function EmployeeDialog({ managers }: Props) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -39,76 +40,27 @@ export function EmployeeDialog({ managers }: Props) {
     department: "",
     manager_id: "",
     join_date: "",
-    role: "employee",
+    role: "employee" as Role,
   });
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      const supabase = createClient();
+    startTransition(async () => {
+      const result = await createEmployee({
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        department: form.department,
+        manager_id: form.manager_id || null,
+        join_date: form.join_date,
+        role: form.role,
+      });
 
-      // Generate employee code
-      const { count } = await supabase
-        .from("employees")
-        .select("*", { count: "exact", head: true });
-
-      const code = `EMP${String((count ?? 0) + 1).padStart(3, "0")}`;
-
-      // Create user first
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .insert({ email: form.email, role: form.role })
-        .select()
-        .single();
-
-      if (userError) throw userError;
-
-      // Create employee
-      const { error: empError } = await supabase
-        .from("employees")
-        .insert({
-          user_id: user.id,
-          employee_code: code,
-          first_name: form.first_name,
-          last_name: form.last_name,
-          department: form.department,
-          manager_id: form.manager_id || null,
-          join_date: form.join_date,
-          status: "active",
-        });
-
-      if (empError) throw empError;
-
-      // Create leave balances for current year
-      const { data: leaveTypes } = await supabase
-        .from("leave_types")
-        .select("id, annual_days")
-        .gt("annual_days", 0);
-
-      if (leaveTypes) {
-        const year = new Date().getFullYear();
-        const { data: emp } = await supabase
-          .from("employees")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (emp) {
-          await supabase.from("leave_balances").insert(
-            leaveTypes.map((lt) => ({
-              employee_id: emp.id,
-              leave_type_id: lt.id,
-              year,
-              allocated_days: lt.annual_days,
-              used_days: 0,
-              remaining_days: lt.annual_days,
-              carry_forward_days: 0,
-            }))
-          );
-        }
+      if (!result.ok) {
+        setError(result.error ?? "Failed to create employee");
+        return;
       }
 
       setOpen(false);
@@ -122,11 +74,7 @@ export function EmployeeDialog({ managers }: Props) {
         role: "employee",
       });
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create employee");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -241,8 +189,8 @@ export function EmployeeDialog({ managers }: Props) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Create Employee"}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Creating..." : "Create Employee"}
             </Button>
           </div>
         </form>

@@ -29,11 +29,7 @@ export default async function ApprovalsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Pending Approvals</h1>
-      <ApprovalList
-        requests={requests ?? []}
-        approverId={employee?.id ?? ""}
-        approverRole={user?.role ?? "employee"}
-      />
+      <ApprovalList requests={requests ?? []} />
     </div>
   );
 }

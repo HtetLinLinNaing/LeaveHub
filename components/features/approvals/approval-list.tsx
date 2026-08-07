@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { approveLeaveRequest } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -31,66 +31,25 @@ interface ApprovalRequest {
 
 interface Props {
   requests: ApprovalRequest[];
-  approverId: string;
-  approverRole: string;
 }
 
-export function ApprovalList({ requests, approverId, approverRole }: Props) {
+export function ApprovalList({ requests }: Props) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function handleAction(id: string, action: "approved" | "rejected") {
-    setProcessingId(id);
+  function handleAction(id: string, action: "approved" | "rejected") {
     setError("");
-    const supabase = createClient();
-
-    try {
-      const update: Record<string, unknown> = {
-        status: action,
-        approved_by: approverId,
-        approved_at: new Date().toISOString(),
-      };
-
-      const { error: updateError } = await supabase
-        .from("leave_requests")
-        .update(update)
-        .eq("id", id);
-
-      if (updateError) throw updateError;
-
-      // If approved, decrement the requester's leave balance
-      if (action === "approved") {
-        const req = requests.find((r) => r.id === id);
-        if (req) {
-          const { data: balance } = await supabase
-            .from("leave_balances")
-            .select("id, used_days, remaining_days")
-            .eq("employee_id", req.employees.id)
-            .eq("leave_type_id", req.leave_type_id)
-            .eq("year", new Date(req.start_date).getFullYear())
-            .maybeSingle();
-
-          if (balance) {
-            const { error: balanceError } = await supabase
-              .from("leave_balances")
-              .update({
-                used_days: balance.used_days + req.days,
-                remaining_days: balance.remaining_days - req.days,
-              })
-              .eq("id", balance.id);
-
-            if (balanceError) throw balanceError;
-          }
-        }
+    setProcessingId(id);
+    startTransition(async () => {
+      const result = await approveLeaveRequest(id, action);
+      if (!result.ok) {
+        setError(result.error ?? "Failed to update request");
       }
-
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update request");
-    } finally {
       setProcessingId(null);
-    }
+      router.refresh();
+    });
   }
 
   if (requests.length === 0) {
@@ -139,7 +98,7 @@ export function ApprovalList({ requests, approverId, approverRole }: Props) {
                 variant="outline"
                 className="text-green-600 hover:bg-green-50"
                 onClick={() => handleAction(req.id, "approved")}
-                disabled={processingId === req.id}
+                disabled={pending && processingId === req.id}
               >
                 <Check className="mr-1 h-4 w-4" />
                 Approve
@@ -149,7 +108,7 @@ export function ApprovalList({ requests, approverId, approverRole }: Props) {
                 variant="outline"
                 className="text-red-600 hover:bg-red-50"
                 onClick={() => handleAction(req.id, "rejected")}
-                disabled={processingId === req.id}
+                disabled={pending && processingId === req.id}
               >
                 <X className="mr-1 h-4 w-4" />
                 Reject

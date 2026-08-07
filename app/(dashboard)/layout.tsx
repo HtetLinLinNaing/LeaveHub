@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getSessionFromRequest } from "@/lib/auth";
+import { getSessionFromRequest, getCurrentEmployee } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/shared/sidebar";
 import { SidebarProvider } from "@/components/shared/sidebar-context";
 import { MobileTopBar } from "@/components/shared/mobile-top-bar";
@@ -17,10 +18,19 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  // Role comes from the users table, not the cookie. A forged cookie can
+  // claim any email; it cannot claim a different role for that email.
+  const supabase = await createClient();
+  const { user } = await getCurrentEmployee(supabase, session.email);
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <SidebarProvider>
       <div className="flex h-screen bg-gray-50">
-        <Sidebar role={session.role} email={session.email} />
+        <Sidebar role={user.role} email={session.email} />
         <div className="flex min-w-0 flex-1 flex-col">
           <MobileTopBar />
           <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>

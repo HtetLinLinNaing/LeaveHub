@@ -30,7 +30,7 @@ export default function LoginPage() {
         return;
       }
 
-      setMockSession({ email: user.email, role: user.role });
+      setMockSession({ email: user.email });
       router.push("/");
       router.refresh();
     } catch {

@@ -4,11 +4,11 @@ import type { Role } from "./types";
 
 const MOCK_USER_KEY = "leavehub_mock_user";
 
-// Client-safe auth utilities (no server imports)
-
+// The cookie stores ONLY the email. Role and identity are re-derived
+// server-side from the users table on every request — the client cannot
+// elevate itself by editing its own cookie.
 export interface MockSession {
   email: string;
-  role: Role;
 }
 
 export type CurrentEmployee = {
@@ -23,7 +23,7 @@ export type CurrentEmployee = {
 
 export function setMockSession(session: MockSession) {
   if (typeof document !== "undefined") {
-    document.cookie = `${MOCK_USER_KEY}=${encodeURIComponent(JSON.stringify(session))}; path=/; max-age=86400`;
+    document.cookie = `${MOCK_USER_KEY}=${encodeURIComponent(JSON.stringify({ email: session.email }))}; path=/; max-age=86400`;
   }
 }
 
@@ -38,7 +38,11 @@ export function getMockSessionFromCookie(cookieHeader: string): MockSession | nu
   const match = cookies.find((c) => c.startsWith(`${MOCK_USER_KEY}=`));
   if (!match) return null;
   try {
-    return JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
+    const parsed = JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
+    if (typeof parsed !== "object" || parsed === null || typeof parsed.email !== "string") {
+      return null;
+    }
+    return { email: parsed.email };
   } catch {
     return null;
   }
@@ -51,8 +55,9 @@ export const getSessionFromRequest = cache(
     getMockSessionFromCookie(cookieHeader)
 );
 
-// Per-request memoized user + employee lookup. Replaces the duplicated
-// `users` + `employees` query pair in every dashboard page.
+// Per-request memoized user + employee lookup. Returns role from the users
+// table — never from the cookie. Replaces the duplicated `users` + `employees`
+// query pair in every dashboard page.
 export const getCurrentEmployee = cache(
   async (
     supabase: SupabaseClient,
