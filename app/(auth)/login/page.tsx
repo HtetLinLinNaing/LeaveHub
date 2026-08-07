@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { setMockSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
@@ -18,18 +17,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
-      const { data: user, error: dbError } = await supabase
-        .from("users")
-        .select("email, role")
-        .eq("email", email)
-        .single();
+      const res = await fetch("/api/auth/mock-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
-      if (dbError || !user) {
+      if (!res.ok) {
         setError("Employee not found. Contact HR to get access.");
         return;
       }
 
+      const { user } = await res.json();
       setMockSession({ email: user.email });
       router.push("/");
       router.refresh();
