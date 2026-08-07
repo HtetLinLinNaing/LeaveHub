@@ -13,7 +13,8 @@ LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM users WHERE id = auth.uid() AND role = ANY(check_roles)
+    SELECT 1 FROM users
+    WHERE id = auth.uid() AND role::text = ANY(check_roles)
   )
 $$;
 
