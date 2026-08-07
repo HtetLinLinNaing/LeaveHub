@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import { getCachedYearHolidays } from "@/lib/cache";
 import { TeamCalendar } from "@/components/features/calendar/team-calendar";
 

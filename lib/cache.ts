@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import type { LeaveType, Holiday } from "@/lib/types";
 
 // Cross-request cached data accessors. The wrapped fns are re-invoked

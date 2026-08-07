@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import { EmployeeList } from "@/components/features/employees/employee-list";
 import { EmployeeDialog } from "@/components/features/employees/employee-dialog";
 

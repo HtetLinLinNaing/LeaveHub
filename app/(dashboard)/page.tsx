@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import { getCachedHolidaysFromDate } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

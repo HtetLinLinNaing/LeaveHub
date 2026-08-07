@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getSessionFromRequest, getCurrentEmployee } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import { Sidebar } from "@/components/shared/sidebar";
 import { SidebarProvider } from "@/components/shared/sidebar-context";
 import { MobileTopBar } from "@/components/shared/mobile-top-bar";

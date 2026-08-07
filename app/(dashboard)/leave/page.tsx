@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/admin";
 import { getCachedLeaveTypes } from "@/lib/cache";
 import { LeaveRequestList } from "@/components/features/leave/leave-request-list";
 import { LeaveRequestDialog } from "@/components/features/leave/leave-request-dialog";
