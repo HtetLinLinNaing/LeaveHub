@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import { STATUS_COLORS } from "@/lib/constants";
 import { format } from "date-fns";
 import type { LeaveRequestStatus } from "@/lib/types";
@@ -19,6 +20,27 @@ interface Request {
   status: LeaveRequestStatus;
   created_at: string;
   leave_types: { name: string } | null;
+}
+
+function dateRange(start: string, end: string) {
+  if (start === end) return format(new Date(start), "MMM d, yyyy");
+  return `${format(new Date(start), "MMM d")} — ${format(new Date(end), "MMM d, yyyy")}`;
+}
+
+function StatusBadge({ status }: { status: LeaveRequestStatus }) {
+  return (
+    <Badge variant="outline" className={STATUS_COLORS[status]}>
+      {status}
+    </Badge>
+  );
+}
+
+function CancelButton({ id, onCancel, disabled }: { id: string; onCancel: (id: string) => void; disabled: boolean }) {
+  return (
+    <Button variant="ghost" size="sm" onClick={() => onCancel(id)} disabled={disabled}>
+      Cancel
+    </Button>
+  );
 }
 
 export function LeaveRequestList({ requests }: { requests: Request[] }) {
@@ -36,72 +58,43 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
     router.refresh();
   }
 
-  if (requests.length === 0) {
-    return (
-      <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
-        No leave requests yet. Click &quot;Request Leave&quot; to create one.
-      </div>
-    );
-  }
+  const columns: Column<Request>[] = [
+    { key: "type", header: "Type", cell: (r) => r.leave_types?.name },
+    { key: "dates", header: "Dates", cell: (r) => dateRange(r.start_date, r.end_date) },
+    { key: "days", header: "Days", cell: (r) => `${r.days}${r.duration_type === "half_day" ? " (½)" : ""}` },
+    { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
+    { key: "actions", header: "Actions", cell: (r) => (r.status === "pending" || r.status === "approved") ? (
+      <CancelButton id={r.id} onCancel={handleCancel} disabled={cancellingId === r.id} />
+    ) : null },
+  ];
 
   return (
-    <div className="rounded-lg border bg-white">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-gray-50 text-left">
-            <th className="px-4 py-3 font-medium">Type</th>
-            <th className="px-4 py-3 font-medium">Dates</th>
-            <th className="px-4 py-3 font-medium">Days</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((req) => (
-            <tr key={req.id} className="border-b last:border-0">
-              <td className="px-4 py-3">{req.leave_types?.name}</td>
-              <td className="px-4 py-3">
-                {format(new Date(req.start_date), "MMM d")}
-                {req.start_date !== req.end_date &&
-                  ` — ${format(new Date(req.end_date), "MMM d")}`}
-              </td>
-              <td className="px-4 py-3">
-                {req.days} {req.duration_type === "half_day" ? "(½)" : ""}
-              </td>
-              <td className="px-4 py-3">
-                <Badge
-                  variant="outline"
-                  className={STATUS_COLORS[req.status]}
-                >
-                  {req.status}
-                </Badge>
-              </td>
-              <td className="px-4 py-3">
-                {req.status === "pending" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCancel(req.id)}
-                    disabled={cancellingId === req.id}
-                  >
-                    Cancel
-                  </Button>
-                )}
-                {req.status === "approved" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCancel(req.id)}
-                    disabled={cancellingId === req.id}
-                  >
-                    Cancel
-                  </Button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ResponsiveTable
+      columns={columns}
+      rows={requests}
+      keyOf={(r) => r.id}
+      mobileCard={(r) => (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">{r.leave_types?.name}</span>
+            <StatusBadge status={r.status} />
+          </div>
+          <div className="text-sm text-gray-500">{dateRange(r.start_date, r.end_date)}</div>
+          <div className="text-sm text-gray-500">
+            {r.days} day{r.days === 1 ? "" : "s"}{r.duration_type === "half_day" ? " (half day)" : ""}
+          </div>
+          {(r.status === "pending" || r.status === "approved") && (
+            <div className="pt-1">
+              <CancelButton id={r.id} onCancel={handleCancel} disabled={cancellingId === r.id} />
+            </div>
+          )}
+        </div>
+      )}
+      empty={
+        <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
+          No leave requests yet. Click &quot;Request Leave&quot; to create one.
+        </div>
+      }
+    />
   );
 }
