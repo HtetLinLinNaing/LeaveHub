@@ -20,6 +20,18 @@ export function HolidayDialog() {
   const router = useRouter();
   const [form, setForm] = useState({ name: "", date: "" });
 
+  const initialForm = { name: "", date: "" };
+
+  function resetForm() {
+    setForm(initialForm);
+    setError("");
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) resetForm();
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -37,7 +49,7 @@ export function HolidayDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button size="sm" />}>
         <Plus className="mr-1 h-4 w-4" />
         Add Holiday
@@ -70,7 +82,10 @@ export function HolidayDialog() {
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => {
+              setOpen(false);
+              resetForm();
+            }}>
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
