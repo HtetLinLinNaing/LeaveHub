@@ -48,15 +48,20 @@ export async function approveLeaveRequest(
     }
     if (!employee) return { ok: false, error: "Approver record not found" };
 
-    // Manager scope: only their direct reports
+    // Manager scope: only their direct reports, never their own.
+    // PRD §9: "A manager cannot approve their own leave."
     if (user.role === "manager") {
       const { data: req } = await supabase
         .from("leave_requests")
-        .select("employees!inner(manager_id)")
+        .select("employee_id, employees!inner(manager_id)")
         .eq("id", requestId)
         .single();
-      const mgr = (req as { employees: { manager_id: string | null } } | null)?.employees?.manager_id;
-      if (mgr !== employee.id) {
+      const r = req as { employee_id: string; employees: { manager_id: string | null } } | null;
+      if (!r) return { ok: false, error: "Request not found" };
+      if (r.employee_id === employee.id) {
+        return { ok: false, error: "You cannot approve your own leave" };
+      }
+      if (r.employees.manager_id !== employee.id) {
         return { ok: false, error: "Not authorized for this request" };
       }
     }
