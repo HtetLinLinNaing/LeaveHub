@@ -16,10 +16,10 @@ export default async function ApprovalsPage() {
       employees!inner(id, first_name, last_name, employee_code, department, manager_id),
       leave_types(name)
     `)
-    .eq("status", "pending")
+    .in("status", ["pending", "approved", "rejected"])
     .order("created_at", { ascending: true });
 
-  // If manager, filter to direct reports
+  // Managers only see their direct reports. HR / admin see all.
   if (user?.role === "manager" && employee) {
     query = query.eq("employees.manager_id", employee.id);
   }
@@ -28,7 +28,7 @@ export default async function ApprovalsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Pending Approvals</h1>
+      <h1 className="mb-6 text-2xl font-bold">Approvals</h1>
       <ApprovalList requests={requests ?? []} />
     </div>
   );
