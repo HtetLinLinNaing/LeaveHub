@@ -67,37 +67,6 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Compassionate Leave
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const c = (balances ?? []).find(
-                (b) => b.leave_types?.name === "Compassionate Leave",
-              );
-              if (!c) {
-                return (
-                  <>
-                    <div className="text-3xl font-bold">—</div>
-                    <p className="text-xs text-gray-500">no balance row</p>
-                  </>
-                );
-              }
-              return (
-                <>
-                  <div className="text-3xl font-bold">{c.remaining_days}</div>
-                  <p className="text-xs text-gray-500">
-                    of {c.allocated_days + c.carry_forward_days} days
-                  </p>
-                </>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
               Pending Requests
             </CardTitle>
           </CardHeader>
