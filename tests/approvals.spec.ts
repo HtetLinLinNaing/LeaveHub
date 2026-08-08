@@ -38,4 +38,34 @@ test.describe("Approvals", () => {
       await expect(page.locator("text=Reject").first()).toBeVisible();
     }
   });
+
+  test("manager cannot approve their own leave request", async ({ page }) => {
+    // Manager submits their own request
+    await login(page, USERS.manager.email);
+    await navigateTo(page, "My Leave");
+    await page.click("text=Request Leave");
+    await page.click('[data-slot="select-trigger"]');
+    await page.click('[data-slot="select-item"] >> text="Annual Leave"');
+    const dateInputs = page.locator('input[type="date"]');
+    await dateInputs.nth(0).fill("2026-08-10");
+    await dateInputs.nth(1).fill("2026-08-10");
+    await page.fill("textarea", "Self approval attempt");
+    await page.click('button >> text="Submit Request"');
+    await page.waitForLoadState("networkidle");
+
+    // Manager opens approvals and tries to approve own request
+    await navigateTo(page, "Approvals");
+    const ownRow = page.locator("text=Bob Tran").first();
+    if (await ownRow.isVisible().catch(() => false)) {
+      const ownApprove = page
+        .locator("tr", { hasText: "Bob Tran" })
+        .locator("text=Approve")
+        .first();
+      if (await ownApprove.isVisible().catch(() => false)) {
+        await ownApprove.click();
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("text=You cannot approve your own leave")).toBeVisible();
+      }
+    }
+  });
 });
