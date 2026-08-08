@@ -20,7 +20,6 @@ export default async function DashboardPage() {
     { count: pendingCount },
     { data: recentRequests },
     holidays,
-    { data: awayToday },
   ] = await Promise.all([
     supabase
       .from("leave_balances")
@@ -39,12 +38,6 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
     getCachedHolidaysFromDate(today, 3),
-    supabase
-      .from("leave_requests")
-      .select("employees(first_name, last_name)")
-      .eq("status", "approved")
-      .lte("start_date", today)
-      .gte("end_date", today),
   ]);
 
   return (
@@ -74,22 +67,42 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Pending Requests
+              Compassionate Leave
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{pendingCount ?? 0}</div>
+            {(() => {
+              const c = (balances ?? []).find(
+                (b) => b.leave_types?.name === "Compassionate Leave",
+              );
+              if (!c) {
+                return (
+                  <>
+                    <div className="text-3xl font-bold">—</div>
+                    <p className="text-xs text-gray-500">no balance row</p>
+                  </>
+                );
+              }
+              return (
+                <>
+                  <div className="text-3xl font-bold">{c.remaining_days}</div>
+                  <p className="text-xs text-gray-500">
+                    of {c.allocated_days + c.carry_forward_days} days
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Away Today
+              Pending Requests
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{awayToday?.length ?? 0}</div>
+            <div className="text-3xl font-bold">{pendingCount ?? 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -106,7 +119,10 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-3">
                 {(recentRequests ?? []).map((req) => (
-                  <li key={req.id} className="flex items-center justify-between">
+                  <li
+                    key={req.id}
+                    className="flex items-center justify-between"
+                  >
                     <div>
                       <span className="text-sm font-medium">
                         {req.leave_types?.name}
