@@ -31,14 +31,6 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    leave_type_id: "",
-    start_date: "",
-    end_date: "",
-    duration_type: "full_day" as "full_day" | "half_day",
-    reason: "",
-  });
-
   const initialForm = {
     leave_type_id: "",
     start_date: "",
@@ -46,6 +38,8 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
     duration_type: "full_day" as "full_day" | "half_day",
     reason: "",
   };
+
+  const [form, setForm] = useState(initialForm);
 
   function resetForm() {
     setForm(initialForm);
@@ -102,10 +96,17 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
             <label className="mb-1 block text-sm font-medium">Leave Type</label>
             <Select
               value={form.leave_type_id}
-              onValueChange={(v) => setForm({ ...form, leave_type_id: v ?? "" })}
+              onValueChange={(v) =>
+                setForm({ ...form, leave_type_id: v ?? "" })
+              }
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select leave type" />
+              <SelectTrigger className="w-50">
+                <SelectValue placeholder="Select leave type">
+                  {form.leave_type_id
+                    ? leaveTypes.find((lt) => lt.id === form.leave_type_id)
+                        ?.name
+                    : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {leaveTypes.map((lt) => (
@@ -119,11 +120,15 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">Start Date</label>
+              <label className="mb-1 block text-sm font-medium">
+                Start Date
+              </label>
               <input
                 type="date"
                 value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, start_date: e.target.value })
+                }
                 required
                 className="w-full rounded-md border px-3 py-2 text-sm"
               />
@@ -145,11 +150,16 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
             <Select
               value={form.duration_type}
               onValueChange={(v) =>
-                setForm({ ...form, duration_type: v as "full_day" | "half_day" })
+                setForm({
+                  ...form,
+                  duration_type: v as "full_day" | "half_day",
+                })
               }
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select duration">
+                  {form.duration_type === "full_day" ? "Full Day" : "Half Day"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="full_day">Full Day</SelectItem>
