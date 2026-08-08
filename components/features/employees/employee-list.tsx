@@ -16,9 +16,14 @@ interface Employee {
   users: { email: string; role: Role } | null;
 }
 
-const columns: Column<Employee>[] = [
+const buildColumns = (currentEmployeeId: string | null): Column<Employee>[] => [
   { key: "code", header: "Code", cell: (e) => <span className="font-mono text-xs">{e.employee_code}</span> },
-  { key: "name", header: "Name", cell: (e) => <span className="font-medium">{e.first_name} {e.last_name}</span> },
+  { key: "name", header: "Name", cell: (e) => (
+    <span className="font-medium">
+      {e.first_name} {e.last_name}
+      {e.id === currentEmployeeId && <span className="ml-2 text-xs font-normal text-blue-700">(You)</span>}
+    </span>
+  ) },
   { key: "email", header: "Email", cell: (e) => e.users?.email },
   { key: "department", header: "Department", cell: (e) => e.department },
   { key: "role", header: "Role", cell: (e) => <Badge variant="outline">{ROLE_LABELS[e.users?.role ?? "employee"]}</Badge> },
@@ -29,11 +34,14 @@ const columns: Column<Employee>[] = [
   ) },
 ];
 
-function MobileEmployeeCard({ employee }: { employee: Employee }) {
+function MobileEmployeeCard({ employee, isMe }: { employee: Employee; isMe: boolean }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="font-medium">{employee.first_name} {employee.last_name}</span>
+        <span className="font-medium">
+          {employee.first_name} {employee.last_name}
+          {isMe && <span className="ml-2 text-xs font-normal text-blue-700">(You)</span>}
+        </span>
         <span className="font-mono text-xs text-gray-500">{employee.employee_code}</span>
       </div>
       <div className="text-sm text-gray-500">{employee.users?.email}</div>
@@ -48,13 +56,20 @@ function MobileEmployeeCard({ employee }: { employee: Employee }) {
   );
 }
 
-export function EmployeeList({ employees }: { employees: Employee[] }) {
+export function EmployeeList({
+  employees,
+  currentEmployeeId,
+}: {
+  employees: Employee[];
+  currentEmployeeId: string | null;
+}) {
   return (
     <ResponsiveTable
-      columns={columns}
+      columns={buildColumns(currentEmployeeId)}
       rows={employees}
       keyOf={(e) => e.id}
-      mobileCard={(e) => <MobileEmployeeCard employee={e} />}
+      mobileCard={(e) => <MobileEmployeeCard employee={e} isMe={e.id === currentEmployeeId} />}
+      rowClassName={(e) => (e.id === currentEmployeeId ? "bg-blue-50" : undefined)}
       empty={
         <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
           No employees found.
