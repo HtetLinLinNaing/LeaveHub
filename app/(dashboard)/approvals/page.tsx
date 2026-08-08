@@ -9,20 +9,29 @@ export default async function ApprovalsPage() {
   const supabase = await createClient();
   const { user, employee } = await getCurrentEmployee(supabase, session?.email);
 
+  // Routing per org chart:
+  //   employee request → manager
+  //   manager request  → HR
+  //   admin sees everything
   let query = supabase
     .from("leave_requests")
     .select(`
       *,
-      employees!inner(id, first_name, last_name, employee_code, department, manager_id),
+      employees!leave_requests_employee_id_fkey(
+        id, first_name, last_name, employee_code, department, manager_id,
+        users!employees_user_id_fkey(role)
+      ),
       leave_types(name)
     `)
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
-  // If manager, filter to direct reports
-  if (user?.role === "manager" && employee) {
-    query = query.eq("employees.manager_id", employee.id);
+  if (user?.role === "manager") {
+    query = query.eq("employees.users.role", "employee");
+  } else if (user?.role === "hr") {
+    query = query.eq("employees.users.role", "manager");
   }
+  // admin: no filter
 
   const { data: requests } = await query;
 

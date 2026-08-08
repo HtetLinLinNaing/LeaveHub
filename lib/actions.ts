@@ -48,17 +48,25 @@ export async function approveLeaveRequest(
     }
     if (!employee) return { ok: false, error: "Approver record not found" };
 
-    // Manager scope: only their direct reports
-    if (user.role === "manager") {
-      const { data: req } = await supabase
-        .from("leave_requests")
-        .select("employees!inner(manager_id)")
-        .eq("id", requestId)
-        .single();
-      const mgr = (req as { employees: { manager_id: string | null } } | null)?.employees?.manager_id;
-      if (mgr !== employee.id) {
-        return { ok: false, error: "Not authorized for this request" };
-      }
+    // Routing per org chart: manager approves employee leave,
+    // HR approves manager leave, admin approves anyone.
+    // Self-approval blocked (PRD §9).
+    const { data: req } = await supabase
+      .from("leave_requests")
+      .select("employee_id, employees!leave_requests_employee_id_fkey(users!employees_user_id_fkey(role))")
+      .eq("id", requestId)
+      .single();
+    if (!req) return { ok: false, error: "Request not found" };
+    if (req.employee_id === employee.id) {
+      return { ok: false, error: "You cannot approve your own leave" };
+    }
+    const requesterRole = (req as { employees: { users: { role: string } | null } | null })
+      ?.employees?.users?.role;
+    if (user.role === "manager" && requesterRole !== "employee") {
+      return { ok: false, error: "Not authorized for this request" };
+    }
+    if (user.role === "hr" && requesterRole !== "manager") {
+      return { ok: false, error: "Not authorized for this request" };
     }
 
     const { data: updated, error: updateError } = await supabase
