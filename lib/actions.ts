@@ -136,13 +136,20 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     // Single-manager org: leave_requests.employees.manager_id drives approvals.
     let managerId = input.manager_id;
     if (managerId === null) {
-      const { data: mgrs } = await supabase
-        .from("employees")
+      const { data: mgrUsers } = await supabase
+        .from("users")
         .select("id")
-        .eq("status", "active")
-        .eq("users.role", "manager")
-        .limit(2);
-      if (mgrs && mgrs.length === 1) managerId = mgrs[0].id;
+        .eq("role", "manager");
+      const mgrUserIds = (mgrUsers ?? []).map((u) => u.id);
+      if (mgrUserIds.length > 0) {
+        const { data: mgrs } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("status", "active")
+          .in("user_id", mgrUserIds)
+          .limit(2);
+        if (mgrs && mgrs.length === 1) managerId = mgrs[0].id;
+      }
     }
 
     // Generate employee code from current count
