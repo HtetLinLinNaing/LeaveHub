@@ -39,6 +39,24 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
     reason: "",
   });
 
+  const initialForm = {
+    leave_type_id: "",
+    start_date: "",
+    end_date: "",
+    duration_type: "full_day" as "full_day" | "half_day",
+    reason: "",
+  };
+
+  function resetForm() {
+    setForm(initialForm);
+    setError("");
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) resetForm();
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -70,7 +88,7 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
         <Plus className="mr-2 h-4 w-4" />
         Request Leave
@@ -158,7 +176,10 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                resetForm();
+              }}
             >
               Cancel
             </Button>

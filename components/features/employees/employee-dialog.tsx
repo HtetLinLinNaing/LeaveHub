@@ -43,6 +43,26 @@ export function EmployeeDialog({ managers }: Props) {
     role: "employee" as Role,
   });
 
+  const initialForm = {
+    first_name: "",
+    last_name: "",
+    email: "",
+    department: "",
+    manager_id: "",
+    join_date: "",
+    role: "employee" as Role,
+  };
+
+  function resetForm() {
+    setForm(initialForm);
+    setError("");
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) resetForm();
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -78,7 +98,7 @@ export function EmployeeDialog({ managers }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
         <Plus className="mr-2 h-4 w-4" />
         Add Employee
@@ -186,7 +206,10 @@ export function EmployeeDialog({ managers }: Props) {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => {
+              setOpen(false);
+              resetForm();
+            }}>
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
