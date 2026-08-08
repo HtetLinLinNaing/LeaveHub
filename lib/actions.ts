@@ -114,7 +114,7 @@ export interface CreateEmployeeInput {
   last_name: string;
   email: string;
   department: string;
-  manager_id: string | null;
+  manager_id?: string | null;
   join_date: string;
   role: Role;
 }
