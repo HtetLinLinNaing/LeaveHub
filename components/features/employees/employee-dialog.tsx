@@ -11,15 +11,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ROLES } from "@/lib/constants";
-import { ROLE_LABELS } from "@/lib/constants";
 import { Plus } from "lucide-react";
 import type { Role } from "@/lib/types";
 
@@ -27,31 +18,22 @@ interface Props {
   managers: { id: string; first_name: string; last_name: string }[];
 }
 
-export function EmployeeDialog({ managers }: Props) {
+export function EmployeeDialog() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
-
-  const [form, setForm] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    department: "",
-    manager_id: "",
-    join_date: "",
-    role: "employee" as Role,
-  });
 
   const initialForm = {
     first_name: "",
     last_name: "",
     email: "",
     department: "",
-    manager_id: "",
     join_date: "",
     role: "employee" as Role,
   };
+
+  const [form, setForm] = useState(initialForm);
 
   function resetForm() {
     setForm(initialForm);
@@ -73,7 +55,6 @@ export function EmployeeDialog({ managers }: Props) {
         last_name: form.last_name,
         email: form.email,
         department: form.department,
-        manager_id: form.manager_id || null,
         join_date: form.join_date,
         role: form.role,
       });
@@ -84,15 +65,7 @@ export function EmployeeDialog({ managers }: Props) {
       }
 
       setOpen(false);
-      setForm({
-        first_name: "",
-        last_name: "",
-        email: "",
-        department: "",
-        manager_id: "",
-        join_date: "",
-        role: "employee",
-      });
+      resetForm();
       router.refresh();
     });
   }
@@ -106,6 +79,9 @@ export function EmployeeDialog({ managers }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add Employee</DialogTitle>
+          <p className="text-xs text-gray-500">
+            Manager is auto-assigned (the only manager in the company).
+          </p>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -153,43 +129,14 @@ export function EmployeeDialog({ managers }: Props) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Role</label>
-              <Select
-                value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: v ?? "employee" })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Manager</label>
-              <Select
-                value={form.manager_id}
-                onValueChange={(v) => setForm({ ...form, manager_id: v ?? "" })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  {managers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.first_name} {m.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Role</label>
+            <input
+              type="text"
+              value="Employee"
+              disabled
+              className="w-full rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-500"
+            />
           </div>
 
           <div>

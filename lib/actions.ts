@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
 import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
+import { employeeSchema, leaveRequestSchema, holidaySchema } from "@/lib/validations";
 import type { Role } from "@/lib/types";
 
 // ----- Tag-based revalidation (existing) -----
@@ -125,6 +126,25 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
       return { ok: false, error: "Not authorized" };
     }
 
+    // Validate shape and role enum. Zod rejects anything other than "employee".
+    const parsed = employeeSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+
+    // Default to the only manager if caller didn't pick one.
+    // Single-manager org: leave_requests.employees.manager_id drives approvals.
+    let managerId = input.manager_id;
+    if (managerId === null) {
+      const { data: mgrs } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("status", "active")
+        .eq("users.role", "manager")
+        .limit(2);
+      if (mgrs && mgrs.length === 1) managerId = mgrs[0].id;
+    }
+
     // Generate employee code from current count
     const { count } = await supabase
       .from("employees")
@@ -148,7 +168,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
         first_name: input.first_name,
         last_name: input.last_name,
         department: input.department,
-        manager_id: input.manager_id,
+        manager_id: managerId,
         join_date: input.join_date,
         status: "active",
       })
@@ -201,6 +221,11 @@ export async function createLeaveRequest(
   try {
     const { supabase, employee } = await requireSession();
     if (!employee) return { ok: false, error: "Employee record not found" };
+
+    const parsed = leaveRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
 
     // Server-side date validation
     if (input.start_date > input.end_date) {
@@ -267,7 +292,13 @@ export async function createHoliday(input: { name: string; date: string }): Prom
     if (!canManageEmployees(user.role as Role)) {
       return { ok: false, error: "Not authorized" };
     }
-    const { error } = await supabase.from("holidays").insert(input);
+
+    const parsed = holidaySchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+
+    const { error } = await supabase.from("holidays").insert(parsed.data);
     if (error) throw error;
     updateTag("holidays");
     revalidatePath("/policies");
