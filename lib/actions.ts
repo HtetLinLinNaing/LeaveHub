@@ -243,6 +243,17 @@ export async function createLeaveRequest(
 
     const actualDays = input.duration_type === "half_day" ? 0.5 : days;
 
+    // Reject weekend-only / holiday-only ranges. calculate_working_days
+    // already excludes weekends and public holidays, so actualDays == 0
+    // means the entire range was non-working days.
+    if (actualDays <= 0) {
+      return {
+        ok: false,
+        error:
+          "Selected range has no working days. Every day falls on a weekend or public holiday.",
+      };
+    }
+
     const { error: insertError } = await supabase.from("leave_requests").insert({
       employee_id: employee.id,
       leave_type_id: input.leave_type_id,

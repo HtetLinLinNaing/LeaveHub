@@ -71,15 +71,19 @@ export function TeamCalendar({
     for (const lr of leaveRequests) {
       const start = new Date(lr.start_date);
       const end = new Date(lr.end_date);
-      for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Skip weekends and public holidays: leave shouldn't render on
+        // days the employee wouldn't have been at work anyway.
+        if (isWeekend(d)) continue;
         const key = format(d, "yyyy-MM-dd");
+        if (holidayMap.has(key)) continue;
         const bucket = map.get(key);
         if (bucket) bucket.push(lr);
         else map.set(key, [lr]);
       }
     }
     return map;
-  }, [leaveRequests]);
+  }, [leaveRequests, holidayMap]);
 
   const employeeColorMap = useMemo(() => {
     const map = new Map<string, string>();
