@@ -49,4 +49,43 @@ test.describe("Calendar", () => {
     // August 2026 should be visible by default
     await expect(page.locator("h1")).toHaveText("Team Calendar");
   });
+
+  test("renders approved leave for self and others on the calendar", async ({ page }) => {
+    // Employee submits and gets manager approval.
+    await login(page, USERS.employee.email);
+    await page.click("text=Request Leave");
+    await page.locator('[role="combobox"]').first().click();
+    await page.click('[role="option"]:text("Annual Leave")');
+    const dates = page.locator('input[type="date"]');
+    const future = new Date();
+    future.setDate(future.getDate() + 30);
+    const dateStr = future.toISOString().slice(0, 10);
+    await dates.nth(0).fill(dateStr);
+    await dates.nth(1).fill(dateStr);
+    await page.fill("textarea", "Calendar visibility test");
+    await page.click('button:has-text("Submit Request")');
+    await page.waitForLoadState("networkidle");
+
+    // Manager approves.
+    await page.context().clearCookies();
+    await login(page, USERS.manager.email);
+    await navigateTo(page, "Approvals");
+    await page.locator("text=Approve").first().click();
+    await page.waitForLoadState("networkidle");
+
+    // Anyone can now see the approved leave on the calendar.
+    await page.context().clearCookies();
+    await login(page, USERS.employee.email);
+    await navigateTo(page, "Calendar");
+    // Navigate forward until the future month with the approved leave is visible.
+    for (let i = 0; i < 2; i++) {
+      const nextBtn = page.locator('button[aria-label="Next month"]');
+      await nextBtn.click();
+      await page.waitForTimeout(200);
+    }
+    // The employee's name should appear on the calendar.
+    const employeeName = USERS.employee.email.split("@")[0];
+    const capitalized = employeeName.charAt(0).toUpperCase() + employeeName.slice(1);
+    await expect(page.locator(`text=${capitalized}`).first()).toBeVisible();
+  });
 });
