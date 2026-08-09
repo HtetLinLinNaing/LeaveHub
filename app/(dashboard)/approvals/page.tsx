@@ -13,16 +13,19 @@ export default async function ApprovalsPage() {
     .from("leave_requests")
     .select(`
       *,
-      employees!inner(id, first_name, last_name, employee_code, department, manager_id),
+      employees!inner(id, first_name, last_name, employee_code, department, manager_id, users!inner(role)),
       leave_types(name)
     `)
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
-  // If manager, filter to direct reports
+  // Manager: only direct reports who are not themselves managers.
   if (user?.role === "manager" && employee) {
-    query = query.eq("employees.manager_id", employee.id);
+    query = query
+      .eq("employees.manager_id", employee.id)
+      .neq("employees.users.role", "manager");
   }
+  // Admin: no filter.
 
   const { data: requests } = await query;
 

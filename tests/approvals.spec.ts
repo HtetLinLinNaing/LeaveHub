@@ -8,8 +8,8 @@ test.describe("Approvals", () => {
     await expect(page.locator("h1")).toHaveText("Pending Approvals");
   });
 
-  test("HR can see approval queue", async ({ page }) => {
-    await login(page, USERS.hr.email);
+  test("Admin can see approval queue", async ({ page }) => {
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Approvals");
     await expect(page.locator("h1")).toHaveText("Pending Approvals");
   });

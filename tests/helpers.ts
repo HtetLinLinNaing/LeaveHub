@@ -1,7 +1,6 @@
 import { type Page, expect } from "@playwright/test";
 
 export const USERS = {
-  hr: { email: "alice@company.com", role: "HR" },
   manager: { email: "bob@company.com", role: "Manager" },
   employee: { email: "charlie@company.com", role: "Employee" },
   employee2: { email: "diana@company.com", role: "Employee" },

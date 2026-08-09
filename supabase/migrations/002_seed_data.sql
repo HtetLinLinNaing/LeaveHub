@@ -10,7 +10,6 @@
 
 -- Seed users (UUIDs are deterministic for dev)
 INSERT INTO users (id, email, role) VALUES
-  ('a0000000-0000-0000-0000-000000000001', 'alice@company.com', 'hr'),
   ('a0000000-0000-0000-0000-000000000002', 'bob@company.com', 'manager'),
   ('a0000000-0000-0000-0000-000000000003', 'charlie@company.com', 'employee'),
   ('a0000000-0000-0000-0000-000000000004', 'diana@company.com', 'employee'),
@@ -18,12 +17,12 @@ INSERT INTO users (id, email, role) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed employees
+-- Note: Eve (admin) is intentionally not in employees. Admin has no leave
+-- balance and cannot request leave.
 INSERT INTO employees (id, user_id, employee_code, first_name, last_name, department, manager_id, join_date, status) VALUES
-  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'EMP001', 'Alice', 'Nguyen', 'HR', NULL, '2024-01-15', 'active'),
   ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'EMP002', 'Bob', 'Tran', 'Engineering', NULL, '2024-02-01', 'active'),
   ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000003', 'EMP003', 'Charlie', 'Le', 'Engineering', 'b0000000-0000-0000-0000-000000000002', '2024-03-10', 'active'),
-  ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'EMP004', 'Diana', 'Pham', 'Engineering', 'b0000000-0000-0000-0000-000000000002', '2024-04-01', 'active'),
-  ('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000005', 'EMP005', 'Eve', 'Vo', 'Admin', NULL, '2024-01-01', 'active')
+  ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'EMP004', 'Diana', 'Pham', 'Engineering', 'b0000000-0000-0000-0000-000000000002', '2024-04-01', 'active')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed leave balances for 2026

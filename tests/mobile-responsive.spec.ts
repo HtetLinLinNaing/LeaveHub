@@ -5,7 +5,7 @@ test.describe("Mobile responsive", () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
   test("drawer opens and closes on phone", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Dashboard");
 
     // Sidebar aside hidden on phone
@@ -27,14 +27,14 @@ test.describe("Mobile responsive", () => {
   });
 
   test("employee list renders as cards on phone", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
 
     // Table hidden
     await expect(page.locator("table")).toBeHidden();
     // Cards visible (seed data)
     await expect(page.getByText("Alice Nguyen")).toBeVisible();
-    await expect(page.getByText("alice@company.com")).toBeVisible();
+    await expect(page.getByText("eve@company.com")).toBeVisible();
   });
 
   test("dialog is bottom-sheet on phone", async ({ page }) => {
@@ -57,14 +57,14 @@ test.describe("Mobile responsive", () => {
   });
 
   test("no horizontal scroll on employees page on phone", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test("top bar sticky on scroll", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     const bar = page.locator(".md\\:hidden.sticky");
     await expect(bar).toBeVisible();
@@ -78,14 +78,14 @@ test.describe("Tablet responsive", () => {
   test.use({ viewport: { width: 768, height: 1024 } });
 
   test("employees renders as table on tablet", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     await expect(page.locator("table")).toBeVisible();
     await expect(page.getByText("Alice Nguyen")).toBeVisible();
   });
 
   test("sidebar visible on tablet", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Dashboard");
     await expect(page.locator("aside.hidden.md\\:flex")).toBeVisible();
     await expect(page.getByTestId("mobile-hamburger")).toBeHidden();
