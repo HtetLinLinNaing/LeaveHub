@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { approveLeaveRequest } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 
@@ -38,6 +45,10 @@ export function ApprovalList({ requests }: Props) {
   const [pending, startTransition] = useTransition();
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState<
+    | { id: string; action: "approved" | "rejected"; name: string }
+    | null
+  >(null);
 
   function handleAction(id: string, action: "approved" | "rejected") {
     setError("");
@@ -97,7 +108,13 @@ export function ApprovalList({ requests }: Props) {
                 size="sm"
                 variant="outline"
                 className="text-green-600 hover:bg-green-50"
-                onClick={() => handleAction(req.id, "approved")}
+                onClick={() =>
+                  setConfirming({
+                    id: req.id,
+                    action: "approved",
+                    name: `${req.employees.first_name} ${req.employees.last_name}`,
+                  })
+                }
                 disabled={pending && processingId === req.id}
               >
                 <Check className="mr-1 h-4 w-4" />
@@ -107,7 +124,13 @@ export function ApprovalList({ requests }: Props) {
                 size="sm"
                 variant="outline"
                 className="text-red-600 hover:bg-red-50"
-                onClick={() => handleAction(req.id, "rejected")}
+                onClick={() =>
+                  setConfirming({
+                    id: req.id,
+                    action: "rejected",
+                    name: `${req.employees.first_name} ${req.employees.last_name}`,
+                  })
+                }
                 disabled={pending && processingId === req.id}
               >
                 <X className="mr-1 h-4 w-4" />
@@ -117,6 +140,44 @@ export function ApprovalList({ requests }: Props) {
           </div>
         </div>
       ))}
+      <Dialog
+        open={confirming !== null}
+        onOpenChange={(o) => !o && setConfirming(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirming?.action === "approved" ? "Approve" : "Reject"}{" "}
+              {confirming?.name}&apos;s request?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            {confirming?.action === "approved"
+              ? "Approving will deduct the days from their leave balance. This can't be undone from here."
+              : "Rejecting will leave their balance unchanged. This can't be undone from here."}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!confirming) return;
+                const { id, action } = confirming;
+                setConfirming(null);
+                handleAction(id, action);
+              }}
+              disabled={pending}
+            >
+              {pending
+                ? "Saving..."
+                : confirming?.action === "approved"
+                ? "Approve"
+                : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
