@@ -12,7 +12,18 @@ WHERE manager_id = (
   )
 );
 
--- 2. Remove the only HR seed user. employees first because of the FK from
+-- 2. Null out any leave_requests.approved_by pointing at the HR employee.
+--    The audit trail is lost; this is acceptable because HR is being removed
+--    entirely and the new model has no FK target for admin approvals.
+UPDATE leave_requests
+SET approved_by = NULL
+WHERE approved_by = (
+  SELECT id FROM employees WHERE user_id = (
+    SELECT id FROM users WHERE email = 'alice@company.com'
+  )
+);
+
+-- 3. Remove the only HR seed user. employees first because of the FK from
 --    employees.user_id to users.id.
 DELETE FROM employees WHERE user_id = (
   SELECT id FROM users WHERE email = 'alice@company.com'
