@@ -149,12 +149,18 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
             <label className="mb-1 block text-sm font-medium">Duration</label>
             <Select
               value={form.duration_type}
-              onValueChange={(v) =>
-                setForm({
-                  ...form,
-                  duration_type: v as "full_day" | "half_day",
-                })
-              }
+              onValueChange={(v) => {
+                // Both half-day options submit the same DB enum value;
+                // the morning/evening distinction is UI-only.
+                if (v === "half_day_morning" || v === "half_day_evening") {
+                  setForm({ ...form, duration_type: "half_day" });
+                } else {
+                  setForm({
+                    ...form,
+                    duration_type: v as "full_day" | "half_day",
+                  });
+                }
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select duration">
@@ -163,7 +169,8 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="full_day">Full Day</SelectItem>
-                <SelectItem value="half_day">Half Day</SelectItem>
+                <SelectItem value="half_day_morning">Half Day (Morning)</SelectItem>
+                <SelectItem value="half_day_evening">Half Day (Evening)</SelectItem>
               </SelectContent>
             </Select>
           </div>
