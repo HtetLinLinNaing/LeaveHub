@@ -44,34 +44,27 @@ export default async function LeavePage() {
 
       {/* Balance cards */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        {(balances ?? []).map((b) => {
-          const isCompassionate = b.leave_types?.name === "Compassionate Leave";
-          if (isCompassionate) {
-            return (
-              <div key={b.id} className="rounded-lg border bg-white p-4">
-                <p className="text-sm text-gray-500">Compassionate Leave</p>
-                <p className="mt-1 text-2xl font-bold">{compassionate.available}</p>
-                <p className="text-xs text-gray-400">
-                  Granted: {compassionate.granted} · Used: {compassionate.used}
-                </p>
-                {compassionate.pending > 0 && (
-                  <p className="mt-1 text-xs text-yellow-700">
-                    {compassionate.pending} day(s) pending admin approval
-                  </p>
-                )}
-              </div>
-            );
-          }
-          return (
-            <div key={b.id} className="rounded-lg border bg-white p-4">
-              <p className="text-sm text-gray-500">{b.leave_types?.name}</p>
-              <p className="mt-1 text-2xl font-bold">{b.remaining_days}</p>
-              <p className="text-xs text-gray-400">
-                of {b.allocated_days + b.carry_forward_days} days remaining
-              </p>
-            </div>
-          );
-        })}
+        {(balances ?? []).map((b) => (
+          <div key={b.id} className="rounded-lg border bg-white p-4">
+            <p className="text-sm text-gray-500">{b.leave_types?.name}</p>
+            <p className="mt-1 text-2xl font-bold">{b.remaining_days}</p>
+            <p className="text-xs text-gray-400">
+              of {b.allocated_days + b.carry_forward_days} days remaining
+            </p>
+          </div>
+        ))}
+        <div className="rounded-lg border bg-white p-4">
+          <p className="text-sm text-gray-500">Compassionate Leave</p>
+          <p className="mt-1 text-2xl font-bold">{compassionate.available}</p>
+          <p className="text-xs text-gray-400">
+            Granted: {compassionate.granted} · Used: {compassionate.used}
+          </p>
+          {compassionate.pending > 0 && (
+            <p className="mt-1 text-xs text-yellow-700">
+              {compassionate.pending} day(s) pending admin approval
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Request list */}
