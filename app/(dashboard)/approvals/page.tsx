@@ -145,6 +145,7 @@ export default async function ApprovalsPage() {
             id: g.id,
             days: Number(g.days),
             reason: g.reason,
+            // schema-constrained enum
             status: g.status as "pending" | "approved" | "rejected",
             created_at: g.created_at,
             approved_at: g.approved_at,
@@ -158,7 +159,18 @@ export default async function ApprovalsPage() {
         })
         .filter((g): g is NonNullable<typeof g> => g !== null);
     }
-    // Direct reports for the propose dialog.
+  }
+
+  // Employees for the propose dialog: admins get all active employees
+  // (escape hatch), managers get their own direct reports.
+  if (user?.role === "admin") {
+    const { data: all } = await supabase
+      .from("employees")
+      .select("id, first_name, last_name, employee_code")
+      .eq("status", "active")
+      .order("first_name");
+    directReportsForDialog = all ?? [];
+  } else if (user?.role === "manager" && currentEmployeeId) {
     const { data: drs } = await supabase
       .from("employees")
       .select("id, first_name, last_name, employee_code")
