@@ -141,7 +141,11 @@ export function TeamCalendar({
             <div
               key={dateStr}
               className={`min-h-[80px] border-b border-r p-1.5 ${
-                !inMonth ? "bg-gray-50 text-gray-400" : ""
+                holiday
+                  ? "bg-red-100"
+                  : !inMonth
+                  ? "bg-gray-50 text-gray-400"
+                  : ""
               } ${weekend ? "bg-gray-50" : ""} ${isToday ? "bg-blue-50" : ""}`}
             >
               <div
@@ -150,13 +154,15 @@ export function TeamCalendar({
                     ? "flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white"
                     : weekend
                     ? "text-gray-400"
+                    : holiday
+                    ? "font-bold text-red-800"
                     : ""
                 }`}
               >
                 {format(day, "d")}
               </div>
               {holiday && (
-                <div className="mb-0.5 truncate rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-700">
+                <div className="mb-0.5 truncate rounded bg-red-600 px-1 py-0.5 text-[10px] font-semibold text-white">
                   {holiday.name}
                 </div>
               )}
