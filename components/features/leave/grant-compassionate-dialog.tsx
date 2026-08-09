@@ -11,13 +11,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { HandHeart } from "lucide-react";
 
 interface DirectReport {
@@ -37,14 +30,7 @@ export function GrantCompassionateDialog({ directReports }: Props) {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const [employeeId, setEmployeeId] = useState("");
-  const [days, setDays] = useState("");
-  const [reason, setReason] = useState("");
-
   function reset() {
-    setEmployeeId("");
-    setDays("");
-    setReason("");
     setError("");
   }
 
@@ -57,13 +43,14 @@ export function GrantCompassionateDialog({ directReports }: Props) {
     e.preventDefault();
     setError("");
 
-    // Read the live form value in case the state hasn't flushed yet
-    // (Radix Select onValueChange is async; reading from the form
-    // guarantees we see the latest pick).
+    // Read everything from the form so we never depend on async state
+    // flushes between selection and submit.
     const formData = new FormData(e.currentTarget);
-    const liveEmployeeId = (formData.get("employee_id") as string) || employeeId;
+    const employeeId = (formData.get("employee_id") as string) || "";
+    const days = (formData.get("days") as string) || "";
+    const reason = (formData.get("reason") as string) || "";
 
-    if (!liveEmployeeId) {
+    if (!employeeId) {
       setError("Please select an employee");
       return;
     }
@@ -72,10 +59,14 @@ export function GrantCompassionateDialog({ directReports }: Props) {
       setError("Days must be a positive number");
       return;
     }
+    if (!reason.trim()) {
+      setError("Reason is required");
+      return;
+    }
 
     startTransition(async () => {
       const result = await createCompassionateGrant({
-        employee_id: liveEmployeeId,
+        employee_id: employeeId,
         days: daysNum,
         reason,
       });
@@ -85,11 +76,10 @@ export function GrantCompassionateDialog({ directReports }: Props) {
       }
       setOpen(false);
       reset();
+      e.currentTarget.reset();
       router.refresh();
     });
   }
-
-  const selected = directReports.find((d) => d.id === employeeId);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -102,39 +92,42 @@ export function GrantCompassionateDialog({ directReports }: Props) {
           <DialogTitle>Grant Compassionate Leave</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="hidden" name="employee_id" value={employeeId} />
           <div>
-            <label className="mb-1 block text-sm font-medium">Employee</label>
-            <Select
-              value={employeeId}
-              onValueChange={(v) => setEmployeeId(v ?? "")}
+            <label
+              htmlFor="employee_id"
+              className="mb-1 block text-sm font-medium"
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select employee">
-                  {selected
-                    ? `${selected.first_name} ${selected.last_name} (${selected.employee_code})`
-                    : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {directReports.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.first_name} {d.last_name} ({d.employee_code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              Employee
+            </label>
+            <select
+              id="employee_id"
+              name="employee_id"
+              required
+              defaultValue=""
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            >
+              <option value="" disabled>
+                Select employee
+              </option>
+              {directReports.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.first_name} {d.last_name} ({d.employee_code})
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Days</label>
+            <label htmlFor="days" className="mb-1 block text-sm font-medium">
+              Days
+            </label>
             <input
+              id="days"
+              name="days"
               type="number"
               min="0.5"
               max="30"
               step="0.5"
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
               required
               className="w-full rounded-md border px-3 py-2 text-sm"
               placeholder="e.g. 1"
@@ -142,10 +135,12 @@ export function GrantCompassionateDialog({ directReports }: Props) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Reason</label>
+            <label htmlFor="reason" className="mb-1 block text-sm font-medium">
+              Reason
+            </label>
             <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              id="reason"
+              name="reason"
               required
               rows={3}
               className="w-full rounded-md border px-3 py-2 text-sm"
