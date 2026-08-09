@@ -1,6 +1,18 @@
 -- Drop the HR role.
 --
--- 1. Remove the only HR seed user. employees first because of the FK from
+-- 1. Null out any manager_id references to the HR employee. employees has a
+--    self-FK on manager_id, so the row can't be deleted while something
+--    points at it. Set those to NULL so the affected employees are now
+--    top-level (matching the seed's intent after Alice is removed).
+UPDATE employees
+SET manager_id = NULL
+WHERE manager_id = (
+  SELECT id FROM employees WHERE user_id = (
+    SELECT id FROM users WHERE email = 'alice@company.com'
+  )
+);
+
+-- 2. Remove the only HR seed user. employees first because of the FK from
 --    employees.user_id to users.id.
 DELETE FROM employees WHERE user_id = (
   SELECT id FROM users WHERE email = 'alice@company.com'
