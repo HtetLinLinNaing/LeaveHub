@@ -114,7 +114,7 @@ const buildColumns = (
   { key: "department", header: "Department", cell: (e) => e.department },
   { key: "role", header: "Role", cell: (e) => <Badge variant="outline">{ROLE_LABELS[e.users?.role ?? "employee"]}</Badge> },
   { key: "status", header: "Status", cell: (e) => (
-    canManage ? <StatusToggle employee={e} /> : (
+    canManage && e.id !== currentEmployeeId ? <StatusToggle employee={e} /> : (
       <Badge variant="outline" className={e.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
         {e.status}
       </Badge>
@@ -144,7 +144,7 @@ function MobileEmployeeCard({
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span>{employee.department}</span>
         <Badge variant="outline">{ROLE_LABELS[employee.users?.role ?? "employee"]}</Badge>
-        {canManage ? (
+        {canManage && !isMe ? (
           <StatusToggle employee={employee} />
         ) : (
           <Badge variant="outline" className={employee.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
