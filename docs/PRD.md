@@ -16,7 +16,7 @@ Small software company with approximately 10 employees.
 
 ## Purpose
 
-LeaveHub helps employees request leave, allows managers to approve leave requests, and enables HR to manage employees, leave policies, and company holidays.
+LeaveHub helps employees request leave, allows managers to approve their direct reports' leave requests, and enables admin to manage employees, leave policies, and company holidays.
 
 The system replaces manual leave tracking through spreadsheets or messages with a centralized application.
 
@@ -28,7 +28,7 @@ Create a simple, reliable, and scalable leave management platform that provides:
 
 - Easy leave requests for employees
 - Clear approval workflows for managers
-- Centralized leave policy management for HR
+- Centralized leave policy management for admin
 - A foundation that can integrate with future systems such as PayHub
 
 ---
@@ -46,7 +46,7 @@ Create a simple, reliable, and scalable leave management platform that provides:
 
 - Build a production-quality full-stack application
 - Demonstrate authentication, authorization, database design, and workflow management
-- Create a scalable foundation for future HR/payroll features
+- Create a scalable foundation for future payroll features
 
 ---
 
@@ -57,9 +57,8 @@ Create a simple, reliable, and scalable leave management platform that provides:
 | Role     | Description                          |
 | -------- | ------------------------------------ |
 | Employee | Requests and manages personal leave  |
-| Manager  | Approves employee leave requests     |
-| HR       | Manages employees and leave policies |
-| Admin    | Manages system configuration         |
+| Manager  | Approves direct reports' leave requests |
+| Admin    | Approves any leave request and manages employees, policies, and holidays |
 
 ---
 
@@ -87,17 +86,17 @@ Manager inherits Employee permissions.
 Additional permissions:
 
 - View team leave requests
-- Approve leave requests
-- Reject leave requests
+- Approve leave requests from direct reports
+- Reject leave requests from direct reports
 - View team leave calendar
 
-A manager cannot approve their own leave.
+A manager cannot approve their own leave request. A manager cannot approve another manager's leave request. Those requests are handled by Admin.
 
 ---
 
-## HR
+## Admin
 
-HR inherits Employee permissions.
+Admin inherits Manager permissions.
 
 Additional permissions:
 
@@ -108,16 +107,9 @@ Additional permissions:
 - Manage leave policies
 - Configure public holidays
 - Manage employee information
+- Approve any leave request, including manager self-requests
 
----
-
-## Admin
-
-Permissions:
-
-- Manage roles
-- Manage permissions
-- Configure system settings
+Admins do not submit leave requests and have no leave balance.
 
 ---
 
@@ -162,11 +154,11 @@ random@gmail.com → Access denied
 
 LeaveHub supports:
 
-| Leave Type          | Annual Allocation | Approval |
-| ------------------- | ----------------- | -------- |
-| Annual Leave        | 14 days           | Manager  |
-| Medical Leave       | 7 days            | Manager  |
-| Compassionate Leave | Manual request    | HR       |
+| Leave Type          | Annual Allocation | Approval                                 |
+| ------------------- | ----------------- | ---------------------------------------- |
+| Annual Leave        | 14 days           | Manager (Admin for manager self-requests) |
+| Medical Leave       | 7 days            | Manager (Admin for manager self-requests) |
+| Compassionate Leave | Manual request    | Manager (Admin for manager self-requests) |
 
 ---
 
@@ -193,55 +185,21 @@ Rules:
 
 # 9. Leave Approval Workflow
 
-## Normal Leave
-
-Annual Leave:
+All leave types follow the same flow:
 
 ```
-Employee
-
-↓
-
-Manager
-
-↓
-
+Employee / Manager
+        ↓
+Direct Manager (only if requester is not a manager)
+        ↓
+Admin (handles manager self-requests and any request not handled by a manager)
+        ↓
 Approved / Rejected
 ```
 
-Medical Leave:
-
-```
-Employee
-
-↓
-
-Manager
-
-↓
-
-Approved / Rejected
-```
-
----
-
-## Compassionate Leave
-
-```
-Employee
-
-↓
-
-Manager Review
-
-↓
-
-HR Approval
-
-↓
-
-Approved
-```
+- Annual Leave: routed to the requester's direct manager. Manager self-requests go to Admin.
+- Medical Leave: routed to the requester's direct manager. Manager self-requests go to Admin.
+- Compassionate Leave: routed to the requester's direct manager. Manager self-requests go to Admin.
 
 ---
 
@@ -277,7 +235,7 @@ Remaining:
 
 Unused annual leave can carry forward.
 
-HR controls the maximum carry-forward amount.
+Admin controls the maximum carry-forward amount.
 
 Example:
 
@@ -285,7 +243,7 @@ Example:
 Remaining Leave:
 10 days
 
-HR Limit:
+Admin Limit:
 6 days
 
 Next Year:
@@ -306,7 +264,7 @@ Extra unused days expire.
 
 # 12. Public Holidays
 
-HR manages holidays manually.
+Admin manages holidays manually.
 
 Example:
 
@@ -351,13 +309,14 @@ Display:
 
 ---
 
-## HR Dashboard
+## Admin Dashboard
 
 Display:
 
-- Employee overview
+- Pending approvals count (across the company)
+- Approved requests this month
 - Employees currently on leave
-- Leave information
+- Upcoming holidays
 
 ---
 
@@ -585,14 +544,14 @@ System should support:
 
 ## Phase 4: Approval Workflow
 
-- Manager approval
-- HR approval
+- Manager approval (direct reports)
+- Admin approval (manager self-requests and any unhandled request)
 
 ## Phase 5: Dashboard
 
 - Employee dashboard
 - Manager dashboard
-- HR dashboard
+- Admin dashboard
 
 ## Phase 6: Testing and Deployment
 
@@ -606,8 +565,8 @@ System should support:
 LeaveHub is successful when:
 
 - Employees can request leave digitally
-- Managers can approve requests
-- HR can manage employees and policies
+- Managers can approve direct reports' requests
+- Admin can approve any request (including manager self-requests) and manage employees and policies
 - Leave balances calculate correctly
 - The system can support future PayHub integration
 
