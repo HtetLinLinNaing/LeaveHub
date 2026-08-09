@@ -113,38 +113,30 @@ test.describe("Leave approval routing", () => {
     await expect(page).toHaveURL("/");
   });
 
-  test("manager grants Compassionate, admin approves, employee uses", async ({ page }) => {
-    // Manager files a Compassionate grant for their direct report.
+  test("manager files Compassionate for direct report, admin approves", async ({ page }) => {
+    // Manager files a Compassionate request for their direct report.
     await login(page, USERS.manager.email);
-    await page.click("text=Grant Compassionate Leave");
-    await page.locator('[role="combobox"]').first().click();
-    await page.click(`[role="option"]:text("${USERS.employee.email.split("@")[0]}")`);
-    await page.locator('input[type="number"]').fill("1");
-    await page.fill("textarea", "Death of grandmother");
-    await page.click('button:has-text("File Grant")');
-    await page.waitForLoadState("networkidle");
-
-    // Admin sees the grant queue and approves.
-    await page.context().clearCookies();
-    await login(page, USERS.admin.email);
-    await navigateTo(page, "Approvals");
-    await expect(page.locator("text=Compassionate Leave Grants")).toBeVisible();
-    await page.locator("text=Approve").first().click();
-    await page.waitForLoadState("networkidle");
-
-    // Employee logs in, sees available balance, files usage request.
-    await page.context().clearCookies();
-    await login(page, USERS.employee.email);
-    await navigateTo(page, "My Leave");
-    await expect(page.locator("text=Compassionate Leave").first()).toBeVisible();
     await page.click("text=Request Leave");
     await page.locator('[role="combobox"]').first().click();
     await page.click('[role="option"]:text("Compassionate Leave")');
+    // The "File for" picker should appear for managers.
+    await page.locator('[role="combobox"]').nth(1).click();
+    await page.click(`[role="option"]:text("${USERS.employee.email.split("@")[0]}")`);
     const dates = page.locator('input[type="date"]');
-    await dates.nth(0).fill(futureDate(21));
-    await dates.nth(1).fill(futureDate(21));
-    await page.fill("textarea", "Taking bereavement day");
+    await dates.nth(0).fill(futureDate(20));
+    await dates.nth(1).fill(futureDate(20));
+    await page.fill("textarea", "Family bereavement");
     await page.click('button:has-text("Submit Request")');
     await page.waitForLoadState("networkidle");
+
+    // Admin sees and approves.
+    await page.context().clearCookies();
+    await login(page, USERS.admin.email);
+    await navigateTo(page, "Approvals");
+    await expect(page.locator("text=Compassionate Leave").first()).toBeVisible();
+    await page.locator("text=Approve").first().click();
+    await expect(page.locator("text=approved").first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 });
