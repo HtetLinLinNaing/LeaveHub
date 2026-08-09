@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
 import { getCachedLeaveTypes } from "@/lib/cache";
@@ -9,7 +10,10 @@ export default async function LeavePage() {
   const cookieStore = await cookies();
   const session = getSessionFromRequest(cookieStore.toString());
   const supabase = await createClient();
-  const { employee } = await getCurrentEmployee(supabase, session?.email);
+  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
+
+  // Admin has no employees row and no leave to manage.
+  if (user?.role === "admin") redirect("/");
 
   const [leaveTypes, { data: balances }, { data: requests }] =
     await Promise.all([
