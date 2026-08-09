@@ -5,6 +5,7 @@ import { getCachedYearHolidays } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_COLORS } from "@/lib/constants";
+import { getCompassionateAvailability } from "@/lib/compassionate";
 import { differenceInCalendarDays, format } from "date-fns";
 
 export default async function DashboardPage() {
@@ -117,6 +118,10 @@ export default async function DashboardPage() {
     getCachedYearHolidays(year),
   ]);
 
+  const compassionate = employee
+    ? await getCompassionateAvailability(supabase, employee.id, year)
+    : { granted: 0, used: 0, available: 0, pending: 0 };
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">
@@ -125,21 +130,46 @@ export default async function DashboardPage() {
 
       {/* Balance cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {(balances ?? []).map((b) => (
-          <Card key={b.id}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                {b.leave_types?.name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{b.remaining_days}</div>
-              <p className="text-xs text-gray-500">
-                of {b.allocated_days + b.carry_forward_days} days
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+        {(balances ?? []).map((b) => {
+          const isCompassionate = b.leave_types?.name === "Compassionate Leave";
+          if (isCompassionate) {
+            return (
+              <Card key={b.id}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-500">
+                    Compassionate Leave
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{compassionate.available}</div>
+                  <p className="text-xs text-gray-500">
+                    Granted: {compassionate.granted} · Used: {compassionate.used}
+                  </p>
+                  {compassionate.pending > 0 && (
+                    <p className="mt-1 text-xs text-yellow-700">
+                      {compassionate.pending} day(s) pending admin approval
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          }
+          return (
+            <Card key={b.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500">
+                  {b.leave_types?.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{b.remaining_days}</div>
+                <p className="text-xs text-gray-500">
+                  of {b.allocated_days + b.carry_forward_days} days
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
 
         <Card>
           <CardHeader className="pb-2">
