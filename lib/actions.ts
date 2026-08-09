@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
 import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { employeeSchema, leaveRequestSchema, holidaySchema } from "@/lib/validations";
+import { employeeSchema, leaveRequestSchema, holidaySchema, compassionateGrantSchema } from "@/lib/validations";
+import { canProposeGrants, canManageGrants } from "@/lib/auth";
+import { getCompassionateAvailability } from "@/lib/compassionate";
 import type { Role } from "@/lib/types";
 
 // ----- Tag-based revalidation (existing) -----
@@ -300,6 +302,30 @@ export async function createLeaveRequest(
       };
     }
 
+    // Compassionate Leave balance check: derived available >= actualDays.
+    if (input.leave_type_id) {
+      const { data: ltForCheck } = await supabase
+        .from("leave_types")
+        .select("id, name")
+        .eq("id", input.leave_type_id)
+        .single();
+      if (ltForCheck?.name === "Compassionate Leave") {
+        const year = new Date(input.start_date).getFullYear();
+        const { available } = await getCompassionateAvailability(
+          supabase,
+          employee.id,
+          year
+        );
+        if (available < actualDays) {
+          return {
+            ok: false,
+            error:
+              "You have no compassionate leave available. Ask your manager to grant it.",
+          };
+        }
+      }
+    }
+
     const { error: insertError } = await supabase.from("leave_requests").insert({
       employee_id: employee.id,
       leave_type_id: input.leave_type_id,
@@ -408,5 +434,148 @@ export async function updateLeaveTypeDays(
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to update leave type" };
+  }
+}
+
+// ----- Propose a Compassionate Leave grant (manager or admin) -----
+
+export interface CreateCompassionateGrantInput {
+  employee_id: string;
+  days: number;
+  reason: string;
+}
+
+export async function createCompassionateGrant(
+  input: CreateCompassionateGrantInput
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, user, employee } = await requireSession();
+    if (!canProposeGrants(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    if (!employee) return { ok: false, error: "Proposer record not found" };
+
+    const parsed = compassionateGrantSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+
+    // Verify target employee is active. Manager scope: must be a direct
+    // report. Admin scope: any active employee.
+    const { data: target } = await supabase
+      .from("employees")
+      .select("id, status, manager_id")
+      .eq("id", input.employee_id)
+      .single();
+    if (!target) return { ok: false, error: "Employee not found" };
+    if (target.status !== "active") {
+      return { ok: false, error: "Employee is not active" };
+    }
+    if (user.role === "manager" && target.manager_id !== employee.id) {
+      return {
+        ok: false,
+        error: "Can only grant to your active direct reports",
+      };
+    }
+
+    // Resolve the compassionate leave_type_id.
+    const { data: lt } = await supabase
+      .from("leave_types")
+      .select("id")
+      .eq("name", "Compassionate Leave")
+      .single();
+    if (!lt) return { ok: false, error: "Compassionate Leave type not found" };
+
+    const { error: insertError } = await supabase.from("leave_grants").insert({
+      employee_id: input.employee_id,
+      leave_type_id: lt.id,
+      days: input.days,
+      reason: input.reason,
+      status: "pending",
+      created_by: employee.id,
+    });
+    if (insertError) throw insertError;
+
+    revalidatePath("/approvals");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to create grant",
+    };
+  }
+}
+
+// ----- Approve or reject a pending grant (admin) -----
+
+export async function approveCompassionateGrant(
+  grantId: string,
+  decision: "approved" | "rejected",
+  rejectionReason?: string
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, user, employee } = await requireSession();
+    if (!canManageGrants(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    if (!employee) return { ok: false, error: "Admin record not found" };
+
+    const now = new Date().toISOString();
+    const update =
+      decision === "approved"
+        ? { status: "approved", approved_by: employee.id, approved_at: now, rejected_by: null, rejected_at: null, rejection_reason: null }
+        : { status: "rejected", rejected_by: employee.id, rejected_at: now, rejection_reason: rejectionReason ?? null };
+
+    const { data: updated, error: updateError } = await supabase
+      .from("leave_grants")
+      .update(update)
+      .eq("id", grantId)
+      .eq("status", "pending")
+      .select("id")
+      .single();
+    if (updateError) throw updateError;
+    if (!updated) return { ok: false, error: "Grant no longer pending" };
+
+    revalidatePath("/approvals");
+    revalidatePath("/");
+    revalidatePath("/leave");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to update grant",
+    };
+  }
+}
+
+// ----- Cancel a still-pending grant (the manager who proposed it) -----
+
+export async function cancelPendingGrant(grantId: string): Promise<ApprovalResult> {
+  try {
+    const { supabase, user, employee } = await requireSession();
+    if (!canProposeGrants(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+    if (!employee) return { ok: false, error: "Proposer record not found" };
+
+    // Only the original creator can cancel; admin cannot cancel through this path.
+    const { data: updated, error: updateError } = await supabase
+      .from("leave_grants")
+      .update({ status: "rejected", rejected_by: employee.id, rejected_at: new Date().toISOString() })
+      .eq("id", grantId)
+      .eq("created_by", employee.id)
+      .eq("status", "pending")
+      .select("id")
+      .single();
+    if (updateError) throw updateError;
+    if (!updated) return { ok: false, error: "Grant no longer pending or not yours" };
+
+    revalidatePath("/approvals");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to cancel grant",
+    };
   }
 }
