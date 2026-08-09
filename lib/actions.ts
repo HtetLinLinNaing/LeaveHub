@@ -46,10 +46,10 @@ export async function approveLeaveRequest(
     if (!canApproveLeave(user.role as Role)) {
       return { ok: false, error: "Not authorized" };
     }
-    if (!employee) return { ok: false, error: "Approver record not found" };
 
     // Manager scope: only direct reports, and never another manager's self-request.
     if (user.role === "manager") {
+      if (!employee) return { ok: false, error: "Approver record not found" };
       const { data: req } = await supabase
         .from("leave_requests")
         .select("employees!inner(manager_id, users!inner(role))")
@@ -68,7 +68,7 @@ export async function approveLeaveRequest(
       .from("leave_requests")
       .update({
         status: action,
-        approved_by: employee.id,
+        approved_by: employee?.id ?? null,
         approved_at: new Date().toISOString(),
       })
       .eq("id", requestId)
