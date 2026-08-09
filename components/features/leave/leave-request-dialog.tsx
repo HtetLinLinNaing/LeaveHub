@@ -23,9 +23,10 @@ import { Plus } from "lucide-react";
 
 interface Props {
   leaveTypes: LeaveType[];
+  compassionateAvailable: number;
 }
 
-export function LeaveRequestDialog({ leaveTypes }: Props) {
+export function LeaveRequestDialog({ leaveTypes, compassionateAvailable }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -40,6 +41,12 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
   };
 
   const [form, setForm] = useState(initialForm);
+
+  // Compassionate Leave is grant-only. Show it in the dropdown only when
+  // the employee has an available balance from an approved grant.
+  const visibleLeaveTypes = leaveTypes.filter(
+    (lt) => lt.name !== "Compassionate Leave" || compassionateAvailable > 0
+  );
 
   function resetForm() {
     setForm(initialForm);
@@ -109,7 +116,7 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {leaveTypes.map((lt) => (
+                {visibleLeaveTypes.map((lt) => (
                   <SelectItem key={lt.id} value={lt.id}>
                     {lt.name}
                   </SelectItem>
