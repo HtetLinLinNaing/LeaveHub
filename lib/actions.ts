@@ -208,6 +208,40 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
   }
 }
 
+// ----- Toggle employee active/inactive (admin) -----
+
+export interface UpdateEmployeeStatusInput {
+  employee_id: string;
+  status: "active" | "inactive";
+}
+
+export async function updateEmployeeStatus(
+  input: UpdateEmployeeStatusInput
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!canManageEmployees(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("employees")
+      .update({ status: input.status })
+      .eq("id", input.employee_id)
+      .select("id, status")
+      .single();
+    if (updateError) throw updateError;
+    if (!updated) return { ok: false, error: "Employee not found" };
+
+    revalidatePath("/employees");
+    revalidatePath("/");
+    revalidatePath("/approvals");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to update status" };
+  }
+}
+
 // ----- Self-service leave request (own employee_id) -----
 
 export interface CreateLeaveRequestInput {
@@ -242,6 +276,17 @@ export async function createLeaveRequest(
     if (calcError) throw calcError;
 
     const actualDays = input.duration_type === "half_day" ? 0.5 : days;
+
+    // Reject weekend-only / holiday-only ranges. calculate_working_days
+    // already excludes weekends and public holidays, so actualDays == 0
+    // means the entire range was non-working days.
+    if (actualDays <= 0) {
+      return {
+        ok: false,
+        error:
+          "Selected range has no working days. Every day falls on a weekend or public holiday.",
+      };
+    }
 
     const { error: insertError } = await supabase.from("leave_requests").insert({
       employee_id: employee.id,

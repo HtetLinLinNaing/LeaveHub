@@ -48,13 +48,46 @@ test.describe("Employee Management", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("employee cannot see employees link", async ({ page }) => {
+  test("employee can see employees directory but not the Add button", async ({ page }) => {
     await login(page, USERS.employee.email);
-    await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+    await expect(page.locator("nav >> text=Employees")).toBeVisible();
+    await navigateTo(page, "Employees");
+    await expect(page.locator("h1")).toHaveText("Employees");
+    await expect(page.locator("text=Add Employee")).not.toBeVisible();
   });
 
-  test("manager cannot see employees link", async ({ page }) => {
+  test("manager can see employees directory but not the Add button", async ({ page }) => {
     await login(page, USERS.manager.email);
-    await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+    await expect(page.locator("nav >> text=Employees")).toBeVisible();
+    await navigateTo(page, "Employees");
+    await expect(page.locator("h1")).toHaveText("Employees");
+    await expect(page.locator("text=Add Employee")).not.toBeVisible();
+  });
+
+  test("admin can deactivate an employee, who then loses access", async ({ page }) => {
+    // Admin deactivates the manager.
+    await login(page, USERS.admin.email);
+    await navigateTo(page, "Employees");
+    // Find the row for the manager and click its Active pill.
+    const row = page.locator("tr", { hasText: USERS.manager.email });
+    await row.locator("button:has-text('Active')").click();
+    // Confirm in the dialog.
+    await page.click('button:has-text("Deactivate")');
+    await page.waitForLoadState("networkidle");
+
+    // Now the manager can no longer access the dashboard.
+    await page.context().clearCookies();
+    await login(page, USERS.manager.email);
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/login/);
+
+    // Admin reactivates so the rest of the suite keeps working.
+    await page.context().clearCookies();
+    await login(page, USERS.admin.email);
+    await navigateTo(page, "Employees");
+    const row2 = page.locator("tr", { hasText: USERS.manager.email });
+    await row2.locator("button:has-text('Inactive')").click();
+    await page.click('button:has-text("Reactivate")');
+    await page.waitForLoadState("networkidle");
   });
 });
