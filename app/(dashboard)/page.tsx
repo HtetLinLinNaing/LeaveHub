@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { getCachedHolidaysFromDate } from "@/lib/cache";
+import { getCachedYearHolidays } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_COLORS } from "@/lib/constants";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
         .eq("status", "approved")
         .lte("start_date", today)
         .gte("end_date", today),
-      getCachedHolidaysFromDate(today, 3),
+      getCachedYearHolidays(year),
     ]);
 
     return (
@@ -81,23 +81,10 @@ export default async function DashboardPage() {
         <div className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Upcoming Holidays</CardTitle>
+              <CardTitle>Upcoming Holidays — {year}</CardTitle>
             </CardHeader>
             <CardContent>
-              {(holidays ?? []).length === 0 ? (
-                <p className="text-sm text-gray-500">No upcoming holidays</p>
-              ) : (
-                <ul className="space-y-3">
-                  {(holidays ?? []).map((h) => (
-                    <li key={h.id} className="flex justify-between text-sm">
-                      <span className="font-medium">{h.name}</span>
-                      <span className="text-gray-500">
-                        {format(new Date(h.date), "MMM d, yyyy")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <HolidayList holidays={holidays ?? []} today={today} />
             </CardContent>
           </Card>
         </div>
@@ -127,7 +114,7 @@ export default async function DashboardPage() {
       .eq("employee_id", employee?.id ?? "")
       .order("created_at", { ascending: false })
       .limit(5),
-    getCachedHolidaysFromDate(today, 3),
+    getCachedYearHolidays(year),
   ]);
 
   return (
@@ -206,26 +193,61 @@ export default async function DashboardPage() {
         {/* Upcoming holidays */}
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Holidays</CardTitle>
+            <CardTitle>Upcoming Holidays — {year}</CardTitle>
           </CardHeader>
           <CardContent>
-            {(holidays ?? []).length === 0 ? (
-              <p className="text-sm text-gray-500">No upcoming holidays</p>
-            ) : (
-              <ul className="space-y-3">
-                {(holidays ?? []).map((h) => (
-                  <li key={h.id} className="flex justify-between text-sm">
-                    <span className="font-medium">{h.name}</span>
-                    <span className="text-gray-500">
-                      {format(new Date(h.date), "MMM d, yyyy")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <HolidayList holidays={holidays ?? []} today={today} />
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+interface HolidayListProps {
+  holidays: { id: string; name: string; date: string }[];
+  today: string;
+}
+
+function HolidayList({ holidays, today }: HolidayListProps) {
+  const upcoming = holidays.filter((h) => h.date >= today);
+  if (upcoming.length === 0) {
+    return <p className="text-sm text-gray-500">No upcoming holidays</p>;
+  }
+
+  // Highlight the nearest one: smallest positive days-away wins.
+  const todayDate = new Date(today);
+  let nearestId: string | null = null;
+  let nearestDays = Infinity;
+  for (const h of upcoming) {
+    const days = differenceInCalendarDays(new Date(h.date), todayDate);
+    if (days >= 0 && days < nearestDays) {
+      nearestDays = days;
+      nearestId = h.id;
+    }
+  }
+
+  return (
+    <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+      {upcoming.map((h) => {
+        const isNearest = h.id === nearestId;
+        return (
+          <li
+            key={h.id}
+            className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm ${
+              isNearest ? "bg-red-50 ring-1 ring-red-200" : ""
+            }`}
+          >
+            <span className={isNearest ? "font-semibold" : "font-medium"}>
+              {h.name}
+            </span>
+            <span className={isNearest ? "text-red-700" : "text-gray-500"}>
+              {format(new Date(h.date), "MMM d, yyyy")}
+              {isNearest && nearestDays <= 7 ? ` · in ${nearestDays} day${nearestDays === 1 ? "" : "s"}` : ""}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
