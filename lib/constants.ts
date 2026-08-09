@@ -1,11 +1,10 @@
 import type { Role } from "./types";
 
-export const ROLES: Role[] = ["employee", "manager", "hr", "admin"];
+export const ROLES: Role[] = ["employee", "manager", "admin"];
 
 export const ROLE_LABELS: Record<Role, string> = {
   employee: "Employee",
   manager: "Manager",
-  hr: "HR",
   admin: "Admin",
 };
 

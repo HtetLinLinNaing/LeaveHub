@@ -1,4 +1,4 @@
-export type Role = "employee" | "manager" | "hr" | "admin";
+export type Role = "employee" | "manager" | "admin";
 
 export type EmployeeStatus = "active" | "inactive";
 

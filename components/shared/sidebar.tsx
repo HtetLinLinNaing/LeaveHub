@@ -26,12 +26,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard, roles: ["employee", "manager", "hr", "admin"] },
-  { label: "My Leave", href: "/leave", icon: FileText, roles: ["employee", "manager", "hr", "admin"] },
-  { label: "Calendar", href: "/calendar", icon: CalendarDays, roles: ["employee", "manager", "hr", "admin"] },
-  { label: "Approvals", href: "/approvals", icon: CheckCircle, roles: ["manager", "hr", "admin"] },
-  { label: "Employees", href: "/employees", icon: Users, roles: ["hr", "admin"] },
-  { label: "Policies", href: "/policies", icon: Settings, roles: ["hr", "admin"] },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard, roles: ["employee", "manager", "admin"] },
+  { label: "My Leave", href: "/leave", icon: FileText, roles: ["employee", "manager"] },
+  { label: "Calendar", href: "/calendar", icon: CalendarDays, roles: ["employee", "manager", "admin"] },
+  { label: "Approvals", href: "/approvals", icon: CheckCircle, roles: ["manager", "admin"] },
+  { label: "Employees", href: "/employees", icon: Users, roles: ["admin"] },
+  { label: "Policies", href: "/policies", icon: Settings, roles: ["admin"] },
 ];
 
 function SidebarContent({ role, email }: { role: Role; email: string }) {
