@@ -778,6 +778,14 @@ Create `tests/leave-approval-routing.spec.ts`:
 import { test, expect } from "@playwright/test";
 import { login, navigateTo, USERS } from "./helpers";
 
+// Use a future date so the working-days calculation accepts the range
+// regardless of when the tests run. Each test gets a unique offset.
+function futureDate(daysFromNow: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  return d.toISOString().slice(0, 10);
+}
+
 async function submitLeaveRequest(page: import("@playwright/test").Page, opts: {
   leaveType: string;
   startDate: string;
@@ -785,14 +793,8 @@ async function submitLeaveRequest(page: import("@playwright/test").Page, opts: {
   reason: string;
 }) {
   await page.click("text=Request Leave");
-  // Pick the leave type by its visible label.
-  await page.click(`[role="combobox"]:near(:text("Leave Type"))`, { timeout: 2000 }).catch(async () => {
-    // Fallback: click the first combobox (Leave Type is the first field).
-    await page.locator('[role="combobox"]').first().click();
-  });
+  await page.locator('[role="combobox"]').first().click();
   await page.click(`[role="option"]:text("${opts.leaveType}")`);
-  await page.fill('input[type="date"]:nth-of-type(1)', opts.startDate);
-  // Use placeholder or label to disambiguate the second date input.
   const dates = page.locator('input[type="date"]');
   await dates.nth(0).fill(opts.startDate);
   await dates.nth(1).fill(opts.endDate);
@@ -807,8 +809,8 @@ test.describe("Leave approval routing", () => {
     await login(page, USERS.employee.email);
     await submitLeaveRequest(page, {
       leaveType: "Annual Leave",
-      startDate: "2026-09-01",
-      endDate: "2026-09-01",
+      startDate: futureDate(14),
+      endDate: futureDate(14),
       reason: "Personal day",
     });
     // Manager logs in and approves.
@@ -825,8 +827,8 @@ test.describe("Leave approval routing", () => {
     await login(page, USERS.manager.email);
     await submitLeaveRequest(page, {
       leaveType: "Annual Leave",
-      startDate: "2026-09-02",
-      endDate: "2026-09-02",
+      startDate: futureDate(15),
+      endDate: futureDate(15),
       reason: "Manager self day",
     });
     // Manager tries to approve their own — it should not appear in their queue.
@@ -840,8 +842,8 @@ test.describe("Leave approval routing", () => {
     await login(page, USERS.manager.email);
     await submitLeaveRequest(page, {
       leaveType: "Annual Leave",
-      startDate: "2026-09-03",
-      endDate: "2026-09-03",
+      startDate: futureDate(16),
+      endDate: futureDate(16),
       reason: "Manager solo day",
     });
     // Employee logs in — they are not a manager and shouldn't see the Approvals link.
@@ -855,8 +857,8 @@ test.describe("Leave approval routing", () => {
     await login(page, USERS.manager.email);
     await submitLeaveRequest(page, {
       leaveType: "Annual Leave",
-      startDate: "2026-09-04",
-      endDate: "2026-09-04",
+      startDate: futureDate(17),
+      endDate: futureDate(17),
       reason: "Manager vacation",
     });
     // Admin logs in and approves.
@@ -873,8 +875,8 @@ test.describe("Leave approval routing", () => {
     await login(page, USERS.employee.email);
     await submitLeaveRequest(page, {
       leaveType: "Annual Leave",
-      startDate: "2026-09-05",
-      endDate: "2026-09-05",
+      startDate: futureDate(18),
+      endDate: futureDate(18),
       reason: "Employee day",
     });
     // Admin logs in and sees the request.
@@ -889,7 +891,7 @@ test.describe("Leave approval routing", () => {
 - [ ] **Step 3: Run the new spec to confirm it passes**
 
 Run: `npx playwright test tests/leave-approval-routing.spec.ts`
-Expected: all 5 tests pass. If a test fails because the date is in the past (e.g. tests run after 2026-09-05), update the date ranges in the test file to a future window.
+Expected: all 5 tests pass. The `futureDate()` helper offsets each request by a unique number of days so the tests never collide on the same date.
 
 - [ ] **Step 4: Commit**
 
