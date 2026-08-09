@@ -95,3 +95,11 @@ export function canApproveLeave(userRole: Role): boolean {
 export function canManageEmployees(userRole: Role): boolean {
   return userRole === "admin";
 }
+
+export function canProposeGrants(userRole: Role): boolean {
+  return ["manager", "admin"].includes(userRole);
+}
+
+export function canManageGrants(userRole: Role): boolean {
+  return userRole === "admin";
+}

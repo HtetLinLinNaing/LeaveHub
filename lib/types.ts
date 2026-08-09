@@ -74,3 +74,26 @@ export interface LeaveRequestWithDetails extends LeaveRequest {
 export interface EmployeeWithUser extends Employee {
   users: Pick<User, "email" | "role">;
 }
+
+export type LeaveGrantStatus = "pending" | "approved" | "rejected";
+
+export interface LeaveGrant {
+  id: string;
+  employee_id: string;
+  leave_type_id: string;
+  days: number;
+  reason: string;
+  status: LeaveGrantStatus;
+  created_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export interface LeaveGrantWithDetails extends LeaveGrant {
+  employee: Pick<Employee, "first_name" | "last_name" | "employee_code" | "department">;
+  created_by_employee: Pick<Employee, "first_name" | "last_name">;
+}
