@@ -48,13 +48,19 @@ test.describe("Employee Management", () => {
     await page.waitForLoadState("networkidle");
   });
 
-  test("employee cannot see employees link", async ({ page }) => {
+  test("employee can see employees directory but not the Add button", async ({ page }) => {
     await login(page, USERS.employee.email);
-    await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+    await expect(page.locator("nav >> text=Employees")).toBeVisible();
+    await navigateTo(page, "Employees");
+    await expect(page.locator("h1")).toHaveText("Employees");
+    await expect(page.locator("text=Add Employee")).not.toBeVisible();
   });
 
-  test("manager cannot see employees link", async ({ page }) => {
+  test("manager can see employees directory but not the Add button", async ({ page }) => {
     await login(page, USERS.manager.email);
-    await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+    await expect(page.locator("nav >> text=Employees")).toBeVisible();
+    await navigateTo(page, "Employees");
+    await expect(page.locator("h1")).toHaveText("Employees");
+    await expect(page.locator("text=Add Employee")).not.toBeVisible();
   });
 });
