@@ -22,9 +22,9 @@ test.describe("Authentication", () => {
   });
 
   test("logs in as HR user", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await expect(page.locator("h1")).toContainText("Welcome");
-    await expect(page.locator(`text=${USERS.hr.email}`)).toBeVisible();
+    await expect(page.locator(`text=${USERS.admin.email}`)).toBeVisible();
   });
 
   test("logs in as manager", async ({ page }) => {
@@ -38,13 +38,13 @@ test.describe("Authentication", () => {
   });
 
   test("logs out successfully", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await logout(page);
     await expect(page).toHaveURL(/\/login/);
   });
 
   test("persists session across page refresh", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await page.reload();
     await expect(page).toHaveURL("/");
     await expect(page.locator("h1")).toContainText("Welcome");

@@ -3,7 +3,7 @@ import { login, navigateTo, USERS } from "./helpers";
 
 test.describe("Calendar", () => {
   test("all roles can see calendar", async ({ page }) => {
-    for (const user of [USERS.hr, USERS.manager, USERS.employee]) {
+    for (const user of [USERS.admin, USERS.manager, USERS.employee]) {
       await login(page, user.email);
       await navigateTo(page, "Calendar");
       await expect(page.locator("h1")).toHaveText("Team Calendar");

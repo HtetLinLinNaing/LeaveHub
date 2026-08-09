@@ -3,14 +3,14 @@ import { login, navigateTo, USERS } from "./helpers";
 
 test.describe("Employee Management", () => {
   test("HR can see employees page", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     await expect(page.locator("h1")).toHaveText("Employees");
     await expect(page.locator("text=Add Employee")).toBeVisible();
   });
 
   test("HR sees seed employees in list", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     await expect(page.locator("text=Alice Nguyen")).toBeVisible();
     await expect(page.locator("text=Bob Tran")).toBeVisible();
@@ -18,7 +18,7 @@ test.describe("Employee Management", () => {
   });
 
   test("HR can open add employee dialog", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     await page.click("text=Add Employee");
     await expect(page.locator("text=First Name")).toBeVisible();
@@ -30,7 +30,7 @@ test.describe("Employee Management", () => {
   });
 
   test("HR can create a new employee", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Employees");
     await page.click("text=Add Employee");
 

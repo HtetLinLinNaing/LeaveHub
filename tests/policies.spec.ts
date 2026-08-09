@@ -3,13 +3,13 @@ import { login, navigateTo, USERS } from "./helpers";
 
 test.describe("Policies", () => {
   test("HR can see policies page", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
     await expect(page.locator("h1")).toHaveText("Policies");
   });
 
   test("HR sees leave types list", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
     await expect(page.locator("text=Leave Types")).toBeVisible();
     await expect(page.locator("text=Annual Leave")).toBeVisible();
@@ -18,14 +18,14 @@ test.describe("Policies", () => {
   });
 
   test("HR sees holidays list", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
     await expect(page.locator("text=Public Holidays")).toBeVisible();
     await expect(page.locator("text=Add Holiday")).toBeVisible();
   });
 
   test("HR can open add holiday dialog", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
     await page.click("text=Add Holiday");
     await expect(page.locator("text=Add Public Holiday")).toBeVisible();
@@ -34,7 +34,7 @@ test.describe("Policies", () => {
   });
 
   test("HR can add a holiday", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
     await page.click("text=Add Holiday");
 
@@ -47,7 +47,7 @@ test.describe("Policies", () => {
   });
 
   test("HR can edit leave type days", async ({ page }) => {
-    await login(page, USERS.hr.email);
+    await login(page, USERS.admin.email);
     await navigateTo(page, "Policies");
 
     // Click edit on first leave type
