@@ -9,7 +9,7 @@ test.describe("Role-Based Access Control", () => {
       await expect(page.locator("nav >> text=My Leave")).toBeVisible();
       await expect(page.locator("nav >> text=Calendar")).toBeVisible();
       await expect(page.locator("nav >> text=Approvals")).not.toBeVisible();
-      await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+      await expect(page.locator("nav >> text=Employees")).toBeVisible();
       await expect(page.locator("nav >> text=Policies")).not.toBeVisible();
     });
   });
@@ -21,7 +21,7 @@ test.describe("Role-Based Access Control", () => {
       await expect(page.locator("nav >> text=My Leave")).toBeVisible();
       await expect(page.locator("nav >> text=Calendar")).toBeVisible();
       await expect(page.locator("nav >> text=Approvals")).toBeVisible();
-      await expect(page.locator("nav >> text=Employees")).not.toBeVisible();
+      await expect(page.locator("nav >> text=Employees")).toBeVisible();
       await expect(page.locator("nav >> text=Policies")).not.toBeVisible();
     });
   });
