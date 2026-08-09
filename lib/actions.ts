@@ -48,16 +48,19 @@ export async function approveLeaveRequest(
     }
     if (!employee) return { ok: false, error: "Approver record not found" };
 
-    // Manager scope: only their direct reports
+    // Manager scope: only direct reports, and never another manager's self-request.
     if (user.role === "manager") {
       const { data: req } = await supabase
         .from("leave_requests")
-        .select("employees!inner(manager_id)")
+        .select("employees!inner(manager_id, users!inner(role))")
         .eq("id", requestId)
         .single();
-      const mgr = (req as { employees: { manager_id: string | null } } | null)?.employees?.manager_id;
-      if (mgr !== employee.id) {
+      const r = req as { employees: { manager_id: string | null; users: { role: string } } } | null;
+      if (r?.employees.manager_id !== employee.id) {
         return { ok: false, error: "Not authorized for this request" };
+      }
+      if (r?.employees.users.role === "manager") {
+        return { ok: false, error: "Manager self-requests are handled by admin" };
       }
     }
 
