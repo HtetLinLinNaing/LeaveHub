@@ -144,10 +144,11 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirming(null)}>
+            <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
               Keep request
             </Button>
             <Button
+              type="button"
               onClick={() => {
                 if (!confirming) return;
                 const id = confirming.id;

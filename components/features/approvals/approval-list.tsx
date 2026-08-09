@@ -157,10 +157,11 @@ export function ApprovalList({ requests }: Props) {
               : "Rejecting will leave their balance unchanged. This can't be undone from here."}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirming(null)}>
+            <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={() => {
                 if (!confirming) return;
                 const { id, action } = confirming;
