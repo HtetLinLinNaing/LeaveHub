@@ -57,6 +57,10 @@ export function GrantCompassionateDialog({ directReports }: Props) {
     e.preventDefault();
     setError("");
 
+    if (!employeeId) {
+      setError("Please select an employee");
+      return;
+    }
     const daysNum = Number(days);
     if (!daysNum || daysNum <= 0) {
       setError("Days must be a positive number");

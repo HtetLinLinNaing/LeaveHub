@@ -25,7 +25,7 @@ export const holidaySchema = z.object({
 });
 
 export const compassionateGrantSchema = z.object({
-  employee_id: z.string().uuid(),
+  employee_id: z.string().uuid("Please select an employee"),
   days: z.number().positive().max(30),
   reason: z.string().min(1, "Reason is required").max(500),
 });
