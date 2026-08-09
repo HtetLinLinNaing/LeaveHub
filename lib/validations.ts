@@ -24,6 +24,13 @@ export const holidaySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+export const compassionateGrantSchema = z.object({
+  employee_id: z.string().uuid(),
+  days: z.number().positive().max(30),
+  reason: z.string().min(1, "Reason is required").max(500),
+});
+
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
 export type EmployeeInput = z.infer<typeof employeeSchema>;
 export type HolidayInput = z.infer<typeof holidaySchema>;
+export type CompassionateGrantInput = z.infer<typeof compassionateGrantSchema>;

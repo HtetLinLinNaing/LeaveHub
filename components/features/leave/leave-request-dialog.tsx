@@ -21,27 +21,16 @@ import {
 import type { LeaveType } from "@/lib/types";
 import { Plus } from "lucide-react";
 
-interface DirectReport {
-  id: string;
-  first_name: string;
-  last_name: string;
-  employee_code: string;
-}
-
 interface Props {
   leaveTypes: LeaveType[];
-  directReports: DirectReport[];
-  currentEmployeeId: string;
-  canFileForOthers: boolean;
+  compassionateAvailableDays: number;
 }
 
 const COMPASSIONATE_NAME = "Compassionate Leave";
 
 export function LeaveRequestDialog({
   leaveTypes,
-  directReports,
-  currentEmployeeId,
-  canFileForOthers,
+  compassionateAvailableDays,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -54,14 +43,13 @@ export function LeaveRequestDialog({
     end_date: "",
     duration_type: "full_day" as "full_day" | "half_day",
     reason: "",
-    for_employee_id: "",
   };
 
   const [form, setForm] = useState(initialForm);
 
   const selectedType = leaveTypes.find((lt) => lt.id === form.leave_type_id);
   const isCompassionate = selectedType?.name === COMPASSIONATE_NAME;
-  const showForEmployeePicker = isCompassionate && canFileForOthers;
+  const compassionateLocked = isCompassionate && compassionateAvailableDays <= 0;
 
   function resetForm() {
     setForm(initialForm);
@@ -78,18 +66,13 @@ export function LeaveRequestDialog({
     setError("");
 
     startTransition(async () => {
-      const payload: Parameters<typeof createLeaveRequest>[0] = {
+      const result = await createLeaveRequest({
         leave_type_id: form.leave_type_id,
         start_date: form.start_date,
         end_date: form.end_date,
         duration_type: form.duration_type,
         reason: form.reason,
-      };
-      if (form.for_employee_id && form.for_employee_id !== currentEmployeeId) {
-        payload.for_employee_id = form.for_employee_id;
-      }
-
-      const result = await createLeaveRequest(payload);
+      });
 
       if (!result.ok) {
         setError(result.error ?? "Failed to submit request");
@@ -137,49 +120,13 @@ export function LeaveRequestDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {showForEmployeePicker && (
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                File for
-              </label>
-              <Select
-                value={form.for_employee_id}
-                onValueChange={(v) =>
-                  setForm({ ...form, for_employee_id: v ?? "" })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select employee">
-                    {form.for_employee_id === currentEmployeeId
-                      ? "Myself"
-                      : form.for_employee_id
-                      ? (() => {
-                          const e = directReports.find(
-                            (d) => d.id === form.for_employee_id
-                          );
-                          return e
-                            ? `${e.first_name} ${e.last_name} (${e.employee_code})`
-                            : "Select employee";
-                        })()
-                      : undefined}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={currentEmployeeId}>Myself</SelectItem>
-                  {directReports.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.first_name} {d.last_name} ({d.employee_code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {isCompassionate && (
               <p className="mt-1 text-xs text-gray-500">
-                Compassionate leave can be filed for your direct reports.
+                {compassionateAvailableDays} day(s) available from approved grants.
+                {compassionateLocked && " Ask your manager to grant more."}
               </p>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -193,7 +140,8 @@ export function LeaveRequestDialog({
                   setForm({ ...form, start_date: e.target.value })
                 }
                 required
-                className="w-full rounded-md border px-3 py-2 text-sm"
+                disabled={compassionateLocked}
+                className="w-full rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
               />
             </div>
             <div>
@@ -203,7 +151,8 @@ export function LeaveRequestDialog({
                 value={form.end_date}
                 onChange={(e) => setForm({ ...form, end_date: e.target.value })}
                 required
-                className="w-full rounded-md border px-3 py-2 text-sm"
+                disabled={compassionateLocked}
+                className="w-full rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
               />
             </div>
           </div>
@@ -218,6 +167,7 @@ export function LeaveRequestDialog({
                   duration_type: v as "full_day" | "half_day",
                 })
               }
+              disabled={compassionateLocked}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select duration">
@@ -238,7 +188,8 @@ export function LeaveRequestDialog({
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               required
               rows={3}
-              className="w-full rounded-md border px-3 py-2 text-sm"
+              disabled={compassionateLocked}
+              className="w-full rounded-md border px-3 py-2 text-sm disabled:bg-gray-100"
               placeholder="Reason for leave"
             />
           </div>
@@ -256,7 +207,7 @@ export function LeaveRequestDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || compassionateLocked}>
               {pending ? "Submitting..." : "Submit Request"}
             </Button>
           </div>
