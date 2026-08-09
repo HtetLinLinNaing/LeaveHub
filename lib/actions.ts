@@ -48,18 +48,25 @@ export async function approveLeaveRequest(
     }
 
     // Manager scope: only direct reports, and never another manager's self-request.
+    // Resolve the requester's role in two steps to avoid PostgREST relationship
+    // resolution issues with nested !inner joins.
     if (user.role === "manager") {
       if (!employee) return { ok: false, error: "Approver record not found" };
       const { data: req } = await supabase
         .from("leave_requests")
-        .select("employees!inner(manager_id, users!inner(role))")
+        .select("employees!inner(manager_id, user_id)")
         .eq("id", requestId)
         .single();
-      const r = req as { employees: { manager_id: string | null; users: { role: string } } } | null;
+      const r = req as { employees: { manager_id: string | null; user_id: string } } | null;
       if (r?.employees.manager_id !== employee.id) {
         return { ok: false, error: "Not authorized for this request" };
       }
-      if (r?.employees.users.role === "manager") {
+      const { data: requester } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", r.employees.user_id)
+        .single();
+      if (requester?.role === "manager") {
         return { ok: false, error: "Manager self-requests are handled by admin" };
       }
     }
