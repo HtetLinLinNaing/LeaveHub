@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { cancelLeaveRequest } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
 import { STATUS_COLORS } from "@/lib/constants";
 import { format } from "date-fns";
@@ -35,9 +42,17 @@ function StatusBadge({ status }: { status: LeaveRequestStatus }) {
   );
 }
 
-function CancelButton({ id, onCancel, disabled }: { id: string; onCancel: (id: string) => void; disabled: boolean }) {
+function CancelButton({
+  request,
+  onAsk,
+  disabled,
+}: {
+  request: Request;
+  onAsk: (r: Request) => void;
+  disabled: boolean;
+}) {
   return (
-    <Button variant="ghost" size="sm" onClick={() => onCancel(id)} disabled={disabled}>
+    <Button type="button" variant="ghost" size="sm" onClick={() => onAsk(request)} disabled={disabled}>
       Cancel
     </Button>
   );
@@ -48,6 +63,7 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
   const [pending, startTransition] = useTransition();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState<Request | null>(null);
 
   function handleCancel(id: string) {
     setError("");
@@ -68,7 +84,11 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
     { key: "days", header: "Days", cell: (r) => `${r.days}${r.duration_type === "half_day" ? " (½)" : ""}` },
     { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
     { key: "actions", header: "Actions", cell: (r) => (r.status === "pending" || r.status === "approved") ? (
-      <CancelButton id={r.id} onCancel={handleCancel} disabled={pending && cancellingId === r.id} />
+      <CancelButton
+        request={r}
+        onAsk={setConfirming}
+        disabled={pending && cancellingId === r.id}
+      />
     ) : null },
   ];
 
@@ -95,7 +115,11 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
           </div>
           {(r.status === "pending" || r.status === "approved") && (
             <div className="pt-1">
-              <CancelButton id={r.id} onCancel={handleCancel} disabled={pending && cancellingId === r.id} />
+              <CancelButton
+                request={r}
+                onAsk={setConfirming}
+                disabled={pending && cancellingId === r.id}
+              />
             </div>
           )}
         </div>
@@ -106,6 +130,38 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
         </div>
       }
       />
+      <Dialog
+        open={confirming !== null}
+        onOpenChange={(o) => !o && setConfirming(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel this leave request?</DialogTitle>
+          </DialogHeader>
+          {confirming && (
+            <p className="text-sm text-gray-600">
+              {confirming.leave_types?.name} — {dateRange(confirming.start_date, confirming.end_date)} ({confirming.days} day{confirming.days === 1 ? "" : "s"})
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
+              Keep request
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!confirming) return;
+                const id = confirming.id;
+                setConfirming(null);
+                handleCancel(id);
+              }}
+              disabled={pending}
+            >
+              {pending ? "Cancelling..." : "Cancel request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
