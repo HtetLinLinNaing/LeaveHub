@@ -152,13 +152,11 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
               onValueChange={(v) => {
                 // Both half-day options submit the same DB enum value;
                 // the morning/evening distinction is UI-only.
-                if (v === "half_day_morning" || v === "half_day_evening") {
+                const value = v as "full_day" | "half_day_morning" | "half_day_evening";
+                if (value === "half_day_morning" || value === "half_day_evening") {
                   setForm({ ...form, duration_type: "half_day" });
                 } else {
-                  setForm({
-                    ...form,
-                    duration_type: v as "full_day" | "half_day",
-                  });
+                  setForm({ ...form, duration_type: value });
                 }
               }}
             >
