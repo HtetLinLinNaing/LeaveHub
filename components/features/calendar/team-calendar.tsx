@@ -3,6 +3,12 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   startOfMonth,
   endOfMonth,
   startOfWeek,
@@ -52,6 +58,7 @@ export function TeamCalendar({
   year: number;
 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date(year, new Date().getMonth(), 1));
+  const [openDay, setOpenDay] = useState<Date | null>(null);
 
   const holidayMap = useMemo(() => {
     const map = new Map<string, Holiday>();
@@ -180,14 +187,45 @@ export function TeamCalendar({
                 );
               })}
               {leave.length > 2 && (
-                <div className="text-[10px] text-gray-500">
+                <button
+                  type="button"
+                  onClick={() => setOpenDay(day)}
+                  className="text-[10px] font-medium text-blue-700 hover:underline"
+                >
                   +{leave.length - 2} more
-                </div>
+                </button>
               )}
             </div>
           );
         })}
       </div>
+
+      <Dialog open={openDay !== null} onOpenChange={(o) => !o && setOpenDay(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {openDay ? format(openDay, "EEEE, MMMM d, yyyy") : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {openDay && (
+            <ul className="space-y-1">
+              {(leaveByDate.get(format(openDay, "yyyy-MM-dd")) ?? []).map((lr) => {
+                const name = `${lr.employees.first_name} ${lr.employees.last_name}`;
+                const color = employeeColorMap.get(name) ?? LEAVE_COLORS[0];
+                return (
+                  <li
+                    key={lr.id}
+                    className={`flex items-center justify-between rounded px-2 py-1 text-sm ${color}`}
+                  >
+                    <span className="font-medium">{name}</span>
+                    <span className="text-xs opacity-80">{lr.leave_types.name}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
