@@ -84,9 +84,9 @@ export function hasRole(userRole: Role, required: Role[]): boolean {
 }
 
 export function canApproveLeave(userRole: Role): boolean {
-  return ["manager", "hr", "admin"].includes(userRole);
+  return ["manager", "admin"].includes(userRole);
 }
 
 export function canManageEmployees(userRole: Role): boolean {
-  return ["hr", "admin"].includes(userRole);
+  return userRole === "admin";
 }
