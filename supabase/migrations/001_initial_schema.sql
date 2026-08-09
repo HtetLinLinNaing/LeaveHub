@@ -1,7 +1,10 @@
 -- LeaveHub v2 — Initial Schema
 
 -- Enums
-CREATE TYPE role AS ENUM ('employee', 'manager', 'hr', 'admin');
+-- Note: 'hr' is intentionally not in the role enum. HR was removed; admin
+-- owns employee, policy, and holiday management. The legacy 005_drop_hr_role
+-- migration handles live DBs that still have the old enum value.
+CREATE TYPE role AS ENUM ('employee', 'manager', 'admin');
 CREATE TYPE employee_status AS ENUM ('active', 'inactive');
 CREATE TYPE leave_request_status AS ENUM ('pending', 'approved', 'rejected', 'cancelled');
 CREATE TYPE duration_type AS ENUM ('full_day', 'half_day');
