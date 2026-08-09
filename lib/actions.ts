@@ -208,6 +208,40 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
   }
 }
 
+// ----- Toggle employee active/inactive (admin) -----
+
+export interface UpdateEmployeeStatusInput {
+  employee_id: string;
+  status: "active" | "inactive";
+}
+
+export async function updateEmployeeStatus(
+  input: UpdateEmployeeStatusInput
+): Promise<ApprovalResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!canManageEmployees(user.role as Role)) {
+      return { ok: false, error: "Not authorized" };
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("employees")
+      .update({ status: input.status })
+      .eq("id", input.employee_id)
+      .select("id, status")
+      .single();
+    if (updateError) throw updateError;
+    if (!updated) return { ok: false, error: "Employee not found" };
+
+    revalidatePath("/employees");
+    revalidatePath("/");
+    revalidatePath("/approvals");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to update status" };
+  }
+}
+
 // ----- Self-service leave request (own employee_id) -----
 
 export interface CreateLeaveRequestInput {

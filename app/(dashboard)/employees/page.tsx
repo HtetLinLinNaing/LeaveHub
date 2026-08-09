@@ -23,7 +23,11 @@ export default async function EmployeesPage() {
         <h1 className="text-2xl font-bold">Employees</h1>
         {canManage && <EmployeeDialog />}
       </div>
-      <EmployeeList employees={employees ?? []} currentEmployeeId={employee?.id ?? null} />
+      <EmployeeList
+        employees={employees ?? []}
+        currentEmployeeId={employee?.id ?? null}
+        canManage={canManage}
+      />
     </div>
   );
 }

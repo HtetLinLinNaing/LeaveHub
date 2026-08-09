@@ -72,10 +72,15 @@ export const getCurrentEmployee = cache(
     if (!user) return { user: null, employee: null };
     const { data: employee } = await supabase
       .from("employees")
-      .select("id, first_name, last_name, department")
+      .select("id, first_name, last_name, department, status")
       .eq("user_id", user.id)
       .single();
-    return { user, employee };
+    // Inactive employees are treated as having no record. Admin has no
+    // employees row, so the user object is still returned for admin.
+    if (employee && employee.status !== "active") {
+      return { user, employee: null };
+    }
+    return { user, employee: employee ?? null };
   }
 );
 
