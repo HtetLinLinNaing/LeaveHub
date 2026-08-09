@@ -222,7 +222,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
   }
 }
 
-// ----- Self-service leave request (own employee_id) -----
+// ----- Leave request (self by default; managers/admins can file for someone else) -----
 
 export interface CreateLeaveRequestInput {
   leave_type_id: string;
@@ -230,13 +230,14 @@ export interface CreateLeaveRequestInput {
   end_date: string;
   duration_type: "full_day" | "half_day";
   reason: string;
+  for_employee_id?: string;
 }
 
 export async function createLeaveRequest(
   input: CreateLeaveRequestInput
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, employee } = await requireSession();
+    const { supabase, user, employee } = await requireSession();
     if (!employee) return { ok: false, error: "Employee record not found" };
 
     const parsed = leaveRequestSchema.safeParse(input);
@@ -249,6 +250,27 @@ export async function createLeaveRequest(
       return { ok: false, error: "Start date must be on or before end date" };
     }
 
+    // Filing on behalf of someone else: managers only for their direct reports,
+    // admins for anyone. The for_employee_id defaults to the caller's own row.
+    let targetEmployeeId = employee.id;
+    if (input.for_employee_id && input.for_employee_id !== employee.id) {
+      const { data: target } = await supabase
+        .from("employees")
+        .select("id, manager_id")
+        .eq("id", input.for_employee_id)
+        .single();
+      if (!target) return { ok: false, error: "Target employee not found" };
+
+      if (user.role === "manager") {
+        if (target.manager_id !== employee.id) {
+          return { ok: false, error: "Can only file leave for your direct reports" };
+        }
+      } else if (user.role !== "admin") {
+        return { ok: false, error: "Not authorized to file leave on behalf of others" };
+      }
+      targetEmployeeId = target.id;
+    }
+
     const { data: days, error: calcError } = await supabase.rpc(
       "calculate_working_days",
       { start_d: input.start_date, end_d: input.end_date }
@@ -258,7 +280,7 @@ export async function createLeaveRequest(
     const actualDays = input.duration_type === "half_day" ? 0.5 : days;
 
     const { error: insertError } = await supabase.from("leave_requests").insert({
-      employee_id: employee.id,
+      employee_id: targetEmployeeId,
       leave_type_id: input.leave_type_id,
       start_date: input.start_date,
       end_date: input.end_date,
@@ -270,6 +292,7 @@ export async function createLeaveRequest(
     if (insertError) throw insertError;
 
     revalidatePath("/leave");
+    revalidatePath("/approvals");
     revalidatePath("/");
     return { ok: true };
   } catch (err) {

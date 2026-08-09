@@ -6,6 +6,7 @@ export const leaveRequestSchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   duration_type: z.enum(["full_day", "half_day"]),
   reason: z.string().min(1, "Reason is required").max(500),
+  for_employee_id: z.string().uuid().optional(),
 });
 
 export const employeeSchema = z.object({

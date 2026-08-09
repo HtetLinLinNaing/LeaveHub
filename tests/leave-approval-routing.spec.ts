@@ -112,4 +112,31 @@ test.describe("Leave approval routing", () => {
     await page.goto("/leave");
     await expect(page).toHaveURL("/");
   });
+
+  test("manager files Compassionate for direct report, admin approves", async ({ page }) => {
+    // Manager files a Compassionate request for their direct report.
+    await login(page, USERS.manager.email);
+    await page.click("text=Request Leave");
+    await page.locator('[role="combobox"]').first().click();
+    await page.click('[role="option"]:text("Compassionate Leave")');
+    // The "File for" picker should appear for managers.
+    await page.locator('[role="combobox"]').nth(1).click();
+    await page.click(`[role="option"]:text("${USERS.employee.email.split("@")[0]}")`);
+    const dates = page.locator('input[type="date"]');
+    await dates.nth(0).fill(futureDate(20));
+    await dates.nth(1).fill(futureDate(20));
+    await page.fill("textarea", "Family bereavement");
+    await page.click('button:has-text("Submit Request")');
+    await page.waitForLoadState("networkidle");
+
+    // Admin sees and approves.
+    await page.context().clearCookies();
+    await login(page, USERS.admin.email);
+    await navigateTo(page, "Approvals");
+    await expect(page.locator("text=Compassionate Leave").first()).toBeVisible();
+    await page.locator("text=Approve").first().click();
+    await expect(page.locator("text=approved").first()).toBeVisible({
+      timeout: 5000,
+    });
+  });
 });

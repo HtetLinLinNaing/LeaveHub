@@ -6,6 +6,13 @@ import { getCachedLeaveTypes } from "@/lib/cache";
 import { LeaveRequestList } from "@/components/features/leave/leave-request-list";
 import { LeaveRequestDialog } from "@/components/features/leave/leave-request-dialog";
 
+interface DirectReport {
+  id: string;
+  first_name: string;
+  last_name: string;
+  employee_code: string;
+}
+
 export default async function LeavePage() {
   const cookieStore = await cookies();
   const session = getSessionFromRequest(cookieStore.toString());
@@ -14,6 +21,17 @@ export default async function LeavePage() {
 
   // Admin has no employees row and no leave to manage.
   if (user?.role === "admin") redirect("/");
+
+  // Managers can file Compassionate leave for their direct reports.
+  const { data: directReports } =
+    user?.role === "manager" && employee
+      ? await supabase
+          .from("employees")
+          .select("id, first_name, last_name, employee_code")
+          .eq("manager_id", employee.id)
+          .eq("status", "active")
+          .order("first_name")
+      : { data: [] as DirectReport[] };
 
   const [leaveTypes, { data: balances }, { data: requests }] =
     await Promise.all([
@@ -34,7 +52,12 @@ export default async function LeavePage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">My Leave</h1>
-        <LeaveRequestDialog leaveTypes={leaveTypes ?? []} />
+        <LeaveRequestDialog
+          leaveTypes={leaveTypes ?? []}
+          directReports={directReports ?? []}
+          currentEmployeeId={employee?.id ?? ""}
+          canFileForOthers={(directReports ?? []).length > 0}
+        />
       </div>
 
       {/* Balance cards */}

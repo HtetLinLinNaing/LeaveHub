@@ -21,11 +21,28 @@ import {
 import type { LeaveType } from "@/lib/types";
 import { Plus } from "lucide-react";
 
-interface Props {
-  leaveTypes: LeaveType[];
+interface DirectReport {
+  id: string;
+  first_name: string;
+  last_name: string;
+  employee_code: string;
 }
 
-export function LeaveRequestDialog({ leaveTypes }: Props) {
+interface Props {
+  leaveTypes: LeaveType[];
+  directReports: DirectReport[];
+  currentEmployeeId: string;
+  canFileForOthers: boolean;
+}
+
+const COMPASSIONATE_NAME = "Compassionate Leave";
+
+export function LeaveRequestDialog({
+  leaveTypes,
+  directReports,
+  currentEmployeeId,
+  canFileForOthers,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -37,9 +54,14 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
     end_date: "",
     duration_type: "full_day" as "full_day" | "half_day",
     reason: "",
+    for_employee_id: "",
   };
 
   const [form, setForm] = useState(initialForm);
+
+  const selectedType = leaveTypes.find((lt) => lt.id === form.leave_type_id);
+  const isCompassionate = selectedType?.name === COMPASSIONATE_NAME;
+  const showForEmployeePicker = isCompassionate && canFileForOthers;
 
   function resetForm() {
     setForm(initialForm);
@@ -56,13 +78,18 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
     setError("");
 
     startTransition(async () => {
-      const result = await createLeaveRequest({
+      const payload: Parameters<typeof createLeaveRequest>[0] = {
         leave_type_id: form.leave_type_id,
         start_date: form.start_date,
         end_date: form.end_date,
         duration_type: form.duration_type,
         reason: form.reason,
-      });
+      };
+      if (form.for_employee_id && form.for_employee_id !== currentEmployeeId) {
+        payload.for_employee_id = form.for_employee_id;
+      }
+
+      const result = await createLeaveRequest(payload);
 
       if (!result.ok) {
         setError(result.error ?? "Failed to submit request");
@@ -70,13 +97,7 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
       }
 
       setOpen(false);
-      setForm({
-        leave_type_id: "",
-        start_date: "",
-        end_date: "",
-        duration_type: "full_day",
-        reason: "",
-      });
+      resetForm();
       router.refresh();
     });
   }
@@ -117,6 +138,48 @@ export function LeaveRequestDialog({ leaveTypes }: Props) {
               </SelectContent>
             </Select>
           </div>
+
+          {showForEmployeePicker && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                File for
+              </label>
+              <Select
+                value={form.for_employee_id}
+                onValueChange={(v) =>
+                  setForm({ ...form, for_employee_id: v ?? "" })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select employee">
+                    {form.for_employee_id === currentEmployeeId
+                      ? "Myself"
+                      : form.for_employee_id
+                      ? (() => {
+                          const e = directReports.find(
+                            (d) => d.id === form.for_employee_id
+                          );
+                          return e
+                            ? `${e.first_name} ${e.last_name} (${e.employee_code})`
+                            : "Select employee";
+                        })()
+                      : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={currentEmployeeId}>Myself</SelectItem>
+                  {directReports.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.first_name} {d.last_name} ({d.employee_code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-gray-500">
+                Compassionate leave can be filed for your direct reports.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
