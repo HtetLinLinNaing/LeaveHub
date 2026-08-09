@@ -53,7 +53,7 @@ export function GrantCompassionateDialog({ directReports }: Props) {
     if (!next) reset();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
@@ -61,7 +61,7 @@ export function GrantCompassionateDialog({ directReports }: Props) {
     // (Radix Select onValueChange is async; reading from the form
     // guarantees we see the latest pick).
     const formData = new FormData(e.currentTarget);
-    const liveEmployeeId = (formData.get("employee_id") as string) ?? employeeId;
+    const liveEmployeeId = (formData.get("employee_id") as string) || employeeId;
 
     if (!liveEmployeeId) {
       setError("Please select an employee");
@@ -102,6 +102,7 @@ export function GrantCompassionateDialog({ directReports }: Props) {
           <DialogTitle>Grant Compassionate Leave</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <input type="hidden" name="employee_id" value={employeeId} />
           <div>
             <label className="mb-1 block text-sm font-medium">Employee</label>
             <Select
