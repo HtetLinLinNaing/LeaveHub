@@ -11,9 +11,99 @@ export default async function DashboardPage() {
   const cookieStore = await cookies();
   const session = getSessionFromRequest(cookieStore.toString());
   const supabase = await createClient();
-  const { employee } = await getCurrentEmployee(supabase, session?.email);
+  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
   const today = format(new Date(), "yyyy-MM-dd");
   const year = new Date().getFullYear();
+
+  if (user?.role === "admin") {
+    const startOfMonth = format(new Date(year, new Date().getMonth(), 1), "yyyy-MM-dd");
+    const [
+      { count: pendingCount },
+      { count: approvedThisMonth },
+      { count: onLeaveToday },
+      holidays,
+    ] = await Promise.all([
+      supabase
+        .from("leave_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending"),
+      supabase
+        .from("leave_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved")
+        .gte("approved_at", startOfMonth),
+      supabase
+        .from("leave_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved")
+        .lte("start_date", today)
+        .gte("end_date", today),
+      getCachedHolidaysFromDate(today, 3),
+    ]);
+
+    return (
+      <div>
+        <h1 className="mb-6 text-2xl font-bold">Admin Dashboard</h1>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">
+                Pending Approvals
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{pendingCount ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">
+                Approved This Month
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{approvedThisMonth ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">
+                On Leave Today
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{onLeaveToday ?? 0}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upcoming Holidays</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(holidays ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500">No upcoming holidays</p>
+              ) : (
+                <ul className="space-y-3">
+                  {(holidays ?? []).map((h) => (
+                    <li key={h.id} className="flex justify-between text-sm">
+                      <span className="font-medium">{h.name}</span>
+                      <span className="text-gray-500">
+                        {format(new Date(h.date), "MMM d, yyyy")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const [
     { data: balances },
