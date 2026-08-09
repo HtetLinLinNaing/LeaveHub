@@ -122,6 +122,14 @@ export default async function DashboardPage() {
     ? await getCompassionateAvailability(supabase, employee.id, year)
     : { granted: 0, used: 0, available: 0, pending: 0 };
 
+  // Compassionate Leave is rendered separately with derived values. Drop
+  // any stale leave_balances row for it so the old card doesn't appear.
+  // PostgREST nested-join filters silently return zero rows on this project,
+  // so we filter in JS after hydration.
+  const visibleBalances = (balances ?? []).filter(
+    (b) => b.leave_types?.name !== "Compassionate Leave"
+  );
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">
@@ -130,7 +138,7 @@ export default async function DashboardPage() {
 
       {/* Balance cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {(balances ?? []).map((b) => (
+        {visibleBalances.map((b) => (
           <Card key={b.id}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">
