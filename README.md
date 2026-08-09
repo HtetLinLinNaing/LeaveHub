@@ -1,6 +1,6 @@
 # LeaveHub
 
-Leave management system for small teams. Employees request leave, managers approve, HR manages policies and people.
+Leave management system for small teams. Employees request leave, admin approves all requests and manages employees, policies, and holidays.
 
 ## Tech Stack
 
@@ -11,12 +11,12 @@ Leave management system for small teams. Employees request leave, managers appro
 ## Features
 
 - **Leave Requests** — Submit, edit, cancel. Half-day support. Working days auto-calculated (excludes weekends + holidays).
-- **Approval Workflow** — Manager approves annual/medical leave. Compassionate leave routes through HR.
+- **Approval Workflow** — Manager approves annual/medical leave for their direct reports. Manager self-requests and any other unhandled requests route to admin.
 - **Leave Balances** — Auto-deducted on approval. Carry-forward support.
-- **Employee Management** — HR creates employees, assigns roles/managers, auto-allocates leave balances.
+- **Employee Management** — Admin creates employees, assigns roles/managers, auto-allocates leave balances.
 - **Policies** — Edit leave type allocations. Manage public holidays.
 - **Team Calendar** — Monthly view with holidays and approved leave.
-- **Role-Based Access** — Employee, Manager, HR, Admin. Sidebar nav adapts per role.
+- **Role-Based Access** — Employee, Manager, Admin. Sidebar nav adapts per role. Admin has no leave balance and cannot request leave.
 
 ## Getting Started
 
@@ -53,7 +53,6 @@ npm run dev
 ```
 
 5. Login with seed accounts:
-   - `alice@company.com` — HR
    - `bob@company.com` — Manager
    - `charlie@company.com` — Employee
    - `diana@company.com` — Employee
@@ -79,8 +78,8 @@ app/
 │   ├── page.tsx           # Dashboard (role-aware)
 │   ├── leave/             # Leave requests
 │   ├── approvals/         # Manager approval queue
-│   ├── employees/         # HR: employee management
-│   ├── policies/          # HR: leave types + holidays
+│   ├── employees/         # Admin: employee management
+│   ├── policies/          # Admin: leave types + holidays
 │   └── calendar/          # Team calendar
 ├── api/auth/mock-login/   # Mock auth endpoint
 components/
