@@ -87,11 +87,41 @@ export async function approveLeaveRequest(
       })
       .eq("id", requestId)
       .eq("status", "pending")
-      .select("id, employee_id, leave_type_id, start_date, days")
+      .select("id, employee_id, leave_type_id, start_date, end_date, days")
       .single();
 
     if (updateError) throw updateError;
     if (!updated) return { ok: false, error: "Request not pending" };
+
+    // On approve, defense-in-depth: if another approved request for the
+    // same employee already covers any of these dates, the submitter-side
+    // check was bypassed (e.g. an old request without the check) and we
+    // must not double-book. Reject and roll back the approval.
+    if (action === "approved") {
+      const { data: conflicts } = await supabase
+        .from("leave_requests")
+        .select("id, start_date, end_date")
+        .eq("employee_id", updated.employee_id)
+        .eq("status", "approved")
+        .neq("id", updated.id)
+        .lte("start_date", updated.end_date)
+        .gte("end_date", updated.start_date);
+      if (conflicts && conflicts.length > 0) {
+        await supabase
+          .from("leave_requests")
+          .update({
+            status: "pending",
+            approved_by: null,
+            approved_at: null,
+          })
+          .eq("id", updated.id);
+        return {
+          ok: false,
+          error:
+            "Another approved leave already covers one or more of these dates.",
+        };
+      }
+    }
 
     // If approved, decrement the requester's leave balance
     if (action === "approved") {
@@ -281,6 +311,24 @@ export async function createLeaveRequest(
     // Server-side date validation
     if (input.start_date > input.end_date) {
       return { ok: false, error: "Start date must be on or before end date" };
+    }
+
+    // Overlap check: reject if any pending or approved request for this
+    // employee already covers any of the same dates. Range overlap:
+    // existing.start <= new.end AND existing.end >= new.start.
+    const { data: conflicts } = await supabase
+      .from("leave_requests")
+      .select("id, start_date, end_date, status")
+      .eq("employee_id", employee.id)
+      .in("status", ["pending", "approved"])
+      .lte("start_date", input.end_date)
+      .gte("end_date", input.start_date);
+    if (conflicts && conflicts.length > 0) {
+      return {
+        ok: false,
+        error:
+          "You already have a leave request covering one or more of these dates.",
+      };
     }
 
     const { data: days, error: calcError } = await supabase.rpc(
