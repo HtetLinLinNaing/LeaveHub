@@ -57,7 +57,13 @@ export function GrantCompassionateDialog({ directReports }: Props) {
     e.preventDefault();
     setError("");
 
-    if (!employeeId) {
+    // Read the live form value in case the state hasn't flushed yet
+    // (Radix Select onValueChange is async; reading from the form
+    // guarantees we see the latest pick).
+    const formData = new FormData(e.currentTarget);
+    const liveEmployeeId = (formData.get("employee_id") as string) ?? employeeId;
+
+    if (!liveEmployeeId) {
       setError("Please select an employee");
       return;
     }
@@ -69,7 +75,7 @@ export function GrantCompassionateDialog({ directReports }: Props) {
 
     startTransition(async () => {
       const result = await createCompassionateGrant({
-        employee_id: employeeId,
+        employee_id: liveEmployeeId,
         days: daysNum,
         reason,
       });
