@@ -47,7 +47,11 @@ export default async function LeavePage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">My Leave</h1>
-        <LeaveRequestDialog leaveTypes={leaveTypes ?? []} />
+        <LeaveRequestDialog
+          leaveTypes={(leaveTypes ?? []).filter(
+            (lt) => lt.name !== "Compassionate Leave"
+          )}
+        />
       </div>
 
       {/* Balance cards */}

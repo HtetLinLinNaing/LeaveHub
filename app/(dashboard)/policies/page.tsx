@@ -16,7 +16,11 @@ export default async function PoliciesPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h2 className="mb-4 text-lg font-semibold">Leave Types</h2>
-          <LeaveTypeList leaveTypes={leaveTypes ?? []} />
+          <LeaveTypeList
+            leaveTypes={(leaveTypes ?? []).filter(
+              (lt) => lt.name !== "Compassionate Leave"
+            )}
+          />
         </div>
 
         <div>
