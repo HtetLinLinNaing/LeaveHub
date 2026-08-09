@@ -83,7 +83,7 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
     { key: "dates", header: "Dates", cell: (r) => dateRange(r.start_date, r.end_date) },
     { key: "days", header: "Days", cell: (r) => `${r.days}${r.duration_type === "half_day" ? " (½)" : ""}` },
     { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
-    { key: "actions", header: "Actions", cell: (r) => (r.status === "pending" || r.status === "approved") ? (
+    { key: "actions", header: "Actions", cell: (r) => r.status === "pending" ? (
       <CancelButton
         request={r}
         onAsk={setConfirming}
@@ -113,7 +113,7 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
           <div className="text-sm text-gray-500">
             {r.days} day{r.days === 1 ? "" : "s"}{r.duration_type === "half_day" ? " (half day)" : ""}
           </div>
-          {(r.status === "pending" || r.status === "approved") && (
+          {r.status === "pending" && (
             <div className="pt-1">
               <CancelButton
                 request={r}
