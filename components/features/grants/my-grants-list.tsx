@@ -16,6 +16,7 @@ import { format } from "date-fns";
 
 interface MyGrant {
   id: string;
+  leave_type_name: string;
   days: number;
   reason: string;
   status: "pending" | "approved" | "rejected";
@@ -89,7 +90,7 @@ export function MyGrantsList({ grants }: Props) {
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                Compassionate Leave — {g.days} day(s)
+                {g.leave_type_name} — {g.days} day(s)
               </p>
               <p className="mt-1 text-sm text-gray-500">
                 {format(new Date(g.created_at), "MMM d, yyyy")}
@@ -115,7 +116,7 @@ export function MyGrantsList({ grants }: Props) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel this grant proposal?</DialogTitle>
+            <DialogTitle>Cancel {confirming?.leave_type_name} grant proposal?</DialogTitle>
           </DialogHeader>
           {confirming && (
             <p className="text-sm text-gray-600">
