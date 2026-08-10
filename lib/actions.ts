@@ -5,11 +5,36 @@ import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
 import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { employeeSchema, leaveRequestSchema, holidaySchema, leaveGrantSchema } from "@/lib/validations";
+import {
+  createLeaveRequestSchema,
+  employeeSchema,
+  holidaySchema,
+  leaveGrantSchema,
+} from "@/lib/validations";
 import { canProposeGrants, canManageGrants } from "@/lib/auth";
 import { getGrantDrivenAvailability } from "@/lib/grants";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
-import type { Role } from "@/lib/types";
+import type { DayDuration, Role } from "@/lib/types";
+
+// ----- Per-day duration helpers -----
+
+const UNITS: Record<DayDuration, number> = {
+  full_day: 1,
+  half_day_morning: 0.5,
+  half_day_evening: 0.5,
+};
+
+// Roll a per-day array up to the parent's (duration_type, days) pair so
+// approval / balance / calendar code keeps reading the same shape.
+// All-half → "half_day", all-full or mixed → "full_day", half-month-like
+// cases always flatten to full_day when at least one full day is in the mix.
+function rollUpParent(days: { duration: DayDuration }[]) {
+  const total = days.reduce((sum, d) => sum + UNITS[d.duration], 0);
+  const anyFull = days.some((d) => d.duration === "full_day");
+  const allHalf = days.every((d) => d.duration !== "full_day");
+  const durationType: "full_day" | "half_day" = anyFull || !allHalf ? "full_day" : "half_day";
+  return { total, durationType };
+}
 
 // ----- Tag-based revalidation (existing) -----
 
@@ -289,13 +314,15 @@ export async function updateEmployeeStatus(
 
 // ----- Self-service leave request (own employee_id) -----
 
-export interface CreateLeaveRequestInput {
+export type CreateLeaveRequestInput = {
   leave_type_id: string;
   start_date: string;
   end_date: string;
-  duration_type: "full_day" | "half_day";
+  days: { date: string; duration: DayDuration }[];
   reason: string;
-}
+  emergency_contact?: { name: string; phone: string; relationship: string };
+  mc?: { path: string; name: string };
+};
 
 export async function createLeaveRequest(
   input: CreateLeaveRequestInput
@@ -304,14 +331,45 @@ export async function createLeaveRequest(
     const { supabase, employee } = await requireSession();
     if (!employee) return { ok: false, error: "Employee record not found" };
 
-    const parsed = leaveRequestSchema.safeParse(input);
+    const parsed = createLeaveRequestSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
     // Server-side date validation
-    if (input.start_date > input.end_date) {
+    if (parsed.data.start_date > parsed.data.end_date) {
       return { ok: false, error: "Start date must be on or before end date" };
+    }
+
+    // Drop any weekend / holiday days the UI included. The picker shows
+    // the full range, but the user may have left defaults on a Saturday;
+    // we strip them here so the child rows only hold real working days.
+    const dates = Array.from(new Set(parsed.data.days.map((d) => d.date))).sort();
+    if (dates.length === 0) {
+      return { ok: false, error: "Select at least one day" };
+    }
+    const earliest = dates[0];
+    const latest = dates[dates.length - 1];
+
+    const { data: holidayRows } = await supabase
+      .from("holidays")
+      .select("date")
+      .gte("date", earliest)
+      .lte("date", latest);
+    const holidaySet = new Set((holidayRows ?? []).map((h) => h.date));
+
+    const isWorking = (d: string) => {
+      const dow = new Date(d + "T00:00:00Z").getUTCDay();
+      return dow !== 0 && dow !== 6 && !holidaySet.has(d);
+    };
+
+    const dayRows = parsed.data.days.filter((d) => isWorking(d.date));
+    if (dayRows.length === 0) {
+      return {
+        ok: false,
+        error:
+          "Selected range has no working days. Every day falls on a weekend or public holiday.",
+      };
     }
 
     // Overlap check: reject if any pending or approved request for this
@@ -322,8 +380,8 @@ export async function createLeaveRequest(
       .select("id, start_date, end_date, status")
       .eq("employee_id", employee.id)
       .in("status", ["pending", "approved"])
-      .lte("start_date", input.end_date)
-      .gte("end_date", input.start_date);
+      .lte("start_date", latest)
+      .gte("end_date", earliest);
     if (conflicts && conflicts.length > 0) {
       return {
         ok: false,
@@ -332,41 +390,24 @@ export async function createLeaveRequest(
       };
     }
 
-    const { data: days, error: calcError } = await supabase.rpc(
-      "calculate_working_days",
-      { start_d: input.start_date, end_d: input.end_date }
-    );
-    if (calcError) throw calcError;
+    const { total, durationType } = rollUpParent(dayRows);
 
-    const actualDays = input.duration_type === "half_day" ? 0.5 : days;
-
-    // Reject weekend-only / holiday-only ranges. calculate_working_days
-    // already excludes weekends and public holidays, so actualDays == 0
-    // means the entire range was non-working days.
-    if (actualDays <= 0) {
-      return {
-        ok: false,
-        error:
-          "Selected range has no working days. Every day falls on a weekend or public holiday.",
-      };
-    }
-
-    // Compassionate Leave balance check: derived available >= actualDays.
-    if (input.leave_type_id) {
+    // Compassionate Leave balance check: derived available >= total.
+    if (parsed.data.leave_type_id) {
       const { data: ltForCheck } = await supabase
         .from("leave_types")
         .select("id, name")
-        .eq("id", input.leave_type_id)
+        .eq("id", parsed.data.leave_type_id)
         .single();
       if (ltForCheck && (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(ltForCheck.name)) {
-        const year = new Date(input.start_date).getFullYear();
+        const year = new Date(parsed.data.start_date).getFullYear();
         const { available } = await getGrantDrivenAvailability(
           supabase,
           employee.id,
           year,
           ltForCheck.id
         );
-        if (available < actualDays) {
+        if (available < total) {
           return {
             ok: false,
             error: `You have no ${ltForCheck.name} available. Ask your manager to grant it.`,
@@ -375,17 +416,41 @@ export async function createLeaveRequest(
       }
     }
 
-    const { error: insertError } = await supabase.from("leave_requests").insert({
-      employee_id: employee.id,
-      leave_type_id: input.leave_type_id,
-      start_date: input.start_date,
-      end_date: input.end_date,
-      days: actualDays,
-      duration_type: input.duration_type,
-      reason: input.reason,
-      status: "pending",
-    });
+    // Parent row stays shape-compatible with existing approval / balance
+    // / calendar code. Child rows carry the per-day breakdown.
+    const { data: created, error: insertError } = await supabase
+      .from("leave_requests")
+      .insert({
+        employee_id: employee.id,
+        leave_type_id: parsed.data.leave_type_id,
+        start_date: parsed.data.start_date,
+        end_date: parsed.data.end_date,
+        days: total,
+        duration_type: durationType,
+        reason: parsed.data.reason,
+        status: "pending",
+        emergency_contact_name: parsed.data.emergency_contact?.name ?? null,
+        emergency_contact_phone: parsed.data.emergency_contact?.phone ?? null,
+        emergency_contact_relationship:
+          parsed.data.emergency_contact?.relationship ?? null,
+        mc_file_path: parsed.data.mc?.path ?? null,
+        mc_file_name: parsed.data.mc?.name ?? null,
+        mc_uploaded_at: parsed.data.mc ? new Date().toISOString() : null,
+      })
+      .select("id")
+      .single();
     if (insertError) throw insertError;
+    if (!created) return { ok: false, error: "Failed to submit request" };
+
+    const { error: daysError } = await supabase.from("leave_request_days").insert(
+      dayRows.map((d) => ({
+        leave_request_id: created.id,
+        date: d.date,
+        duration: d.duration,
+        units: UNITS[d.duration],
+      }))
+    );
+    if (daysError) throw daysError;
 
     revalidatePath("/leave");
     revalidatePath("/");
@@ -393,6 +458,97 @@ export async function createLeaveRequest(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to submit request" };
   }
+}
+
+// ----- MC upload (Supabase Storage) -----
+
+const MC_BUCKET = "mc-certificates";
+const MC_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MC_ALLOWED_MIME = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
+
+function extFor(file: File): string {
+  const name = file.name || "";
+  const m = /\.([a-zA-Z0-9]+)$/.exec(name);
+  if (m) return m[1].toLowerCase();
+  if (file.type === "application/pdf") return "pdf";
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/jpeg" || file.type === "image/jpg") return "jpg";
+  return "bin";
+}
+
+export async function uploadMcCertificate(
+  formData: FormData
+): Promise<{ ok: true; path: string; name: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, employee } = await requireSession();
+    if (!employee) return { ok: false, error: "Employee record not found" };
+
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return { ok: false, error: "No file provided" };
+    }
+    if (file.size === 0) return { ok: false, error: "File is empty" };
+    if (file.size > MC_MAX_BYTES) {
+      return { ok: false, error: "File exceeds 5 MB limit" };
+    }
+    // Some browsers report an empty type for files dragged from chat apps;
+    // fall back to the extension when MIME is blank.
+    const mime = file.type || (file.name.toLowerCase().endsWith(".pdf")
+      ? "application/pdf"
+      : file.name.toLowerCase().endsWith(".png")
+      ? "image/png"
+      : "image/jpeg");
+    if (!MC_ALLOWED_MIME.has(mime)) {
+      return { ok: false, error: "Only PDF, JPG, or PNG files are accepted" };
+    }
+
+    // Ensure the bucket exists. The migration creates the table metadata
+    // but Storage buckets are separate; create on demand with private
+    // visibility so only authenticated users can read.
+    await ensureBucket(supabase, MC_BUCKET);
+
+    const ext = extFor(file);
+    const objectKey = `${employee.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const { error: uploadError } = await supabase.storage
+      .from(MC_BUCKET)
+      .upload(objectKey, buf, { contentType: mime, upsert: false });
+    if (uploadError) throw uploadError;
+
+    return { ok: true, path: objectKey, name: file.name };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Upload failed" };
+  }
+}
+
+// Bucket lookup is per-session cached to avoid hammering Storage.listBuckets
+// on every upload. The first call from a given server runtime pays the
+// round-trip; subsequent calls hit the Set.
+const _bucketCache = new Set<string>();
+async function ensureBucket(
+  supabase: Awaited<ReturnType<typeof requireSession>>["supabase"],
+  name: string
+) {
+  if (_bucketCache.has(name)) return;
+  const { data: existing } = await supabase.storage.getBucket(name);
+  if (!existing) {
+    const { error } = await supabase.storage.createBucket(name, {
+      public: false,
+      fileSizeLimit: MC_MAX_BYTES,
+      allowedMimeTypes: Array.from(MC_ALLOWED_MIME),
+    });
+    // Race: another request may have created it concurrently. If create
+    // fails because it already exists, treat as success.
+    if (error && !/already exists|duplicate/i.test(error.message)) {
+      throw error;
+    }
+  }
+  _bucketCache.add(name);
 }
 
 // ----- Cancel own leave request -----
