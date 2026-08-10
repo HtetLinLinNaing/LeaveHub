@@ -6,6 +6,22 @@ export type LeaveRequestStatus = "pending" | "approved" | "rejected" | "cancelle
 
 export type DurationType = "full_day" | "half_day";
 
+// Per-day duration picker; supersedes the parent-row DurationType for
+// new requests. Old single-value rows still resolve to "full_day" or
+// map to "half_day_morning" / "half_day_evening" based on UI choice.
+export type DayDuration = "full_day" | "half_day_morning" | "half_day_evening";
+
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+  relationship: string;
+}
+
+export interface McMeta {
+  path: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -57,6 +73,21 @@ export interface LeaveRequest {
   approved_by: string | null;
   approved_at: string | null;
   created_at: string;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_relationship: string | null;
+  mc_file_path: string | null;
+  mc_file_name: string | null;
+  mc_uploaded_at: string | null;
+}
+
+// One row per working day in a request. Total = sum of units.
+export interface LeaveRequestDay {
+  id: string;
+  leave_request_id: string;
+  date: string;
+  duration: DayDuration;
+  units: number;
 }
 
 export interface Holiday {
