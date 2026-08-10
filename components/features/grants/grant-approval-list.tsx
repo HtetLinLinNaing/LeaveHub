@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { approveCompassionateGrant } from "@/lib/actions";
+import { approveLeaveGrant } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +16,7 @@ import { Check, X } from "lucide-react";
 
 interface PendingGrant {
   id: string;
+  leave_type_name: string;
   days: number;
   reason: string;
   created_at: string;
@@ -45,6 +46,7 @@ export function GrantApprovalList({ grants }: Props) {
         id: string;
         action: "approved" | "rejected";
         name: string;
+        leaveTypeName: string;
       }
     | null
   >(null);
@@ -59,7 +61,7 @@ export function GrantApprovalList({ grants }: Props) {
     setConfirming(null);
     setRejectReason("");
     startTransition(async () => {
-      const result = await approveCompassionateGrant(id, action, reason);
+      const result = await approveLeaveGrant(id, action, reason);
       if (!result.ok) {
         setError(result.error ?? "Failed to update grant");
       }
@@ -95,7 +97,7 @@ export function GrantApprovalList({ grants }: Props) {
                 <Badge variant="outline">{g.employee.department}</Badge>
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                Compassionate Leave — {g.days} day(s)
+                {g.leave_type_name} — {g.days} day(s)
               </p>
               <p className="mt-1 text-sm text-gray-500">
                 Granted by: {g.created_by_employee.first_name}{" "}
@@ -113,6 +115,7 @@ export function GrantApprovalList({ grants }: Props) {
                     id: g.id,
                     action: "approved",
                     name: `${g.employee.first_name} ${g.employee.last_name}`,
+                    leaveTypeName: g.leave_type_name,
                   })
                 }
                 disabled={pending && processingId === g.id}
@@ -129,6 +132,7 @@ export function GrantApprovalList({ grants }: Props) {
                     id: g.id,
                     action: "rejected",
                     name: `${g.employee.first_name} ${g.employee.last_name}`,
+                    leaveTypeName: g.leave_type_name,
                   })
                 }
                 disabled={pending && processingId === g.id}
@@ -153,8 +157,8 @@ export function GrantApprovalList({ grants }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {confirming?.action === "approved" ? "Approve" : "Reject"} grant
-              for {confirming?.name}?
+              {confirming?.action === "approved" ? "Approve" : "Reject"}{" "}
+              {confirming?.leaveTypeName} for {confirming?.name}?
             </DialogTitle>
           </DialogHeader>
           {confirming?.action === "rejected" && (
