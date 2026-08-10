@@ -55,6 +55,24 @@ export function GrantProposeDialog({ employees }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // Defensive client-side check. base-ui Select occasionally drops
+    // onValueChange in controlled mode, leaving the state empty even
+    // though the trigger shows the chosen label. Catch it here so the
+    // user gets an actionable message instead of "Invalid UUID".
+    if (!employeeId) {
+      setError("Please select an employee");
+      return;
+    }
+    if (!leaveTypeName) {
+      setError("Please select a leave type");
+      return;
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(employeeId)) {
+      setError("Employee selection is invalid — please re-pick the employee");
+      return;
+    }
+
     startTransition(async () => {
       const result = await createLeaveGrant({
         employee_id: employeeId,
@@ -118,14 +136,13 @@ export function GrantProposeDialog({ employees }: Props) {
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select employee">
-                  {employeeId
-                    ? (() => {
-                        const e = employees.find((x) => x.id === employeeId);
-                        return e
-                          ? `${e.first_name} ${e.last_name} (${e.employee_code})`
-                          : undefined;
-                      })()
-                    : undefined}
+                  {(value: string | null) => {
+                    if (!value) return undefined;
+                    const e = employees.find((x) => x.id === value);
+                    return e
+                      ? `${e.first_name} ${e.last_name} (${e.employee_code})`
+                      : undefined;
+                  }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
