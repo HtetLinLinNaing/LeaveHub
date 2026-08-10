@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { getCachedLeaveTypes } from "@/lib/cache";
+import { getCachedLeaveTypes, getCachedYearHolidays } from "@/lib/cache";
 import { getGrantDrivenOverview } from "@/lib/grants";
 import { LeaveRequestList } from "@/components/features/leave/leave-request-list";
 import { LeaveRequestDialog } from "@/components/features/leave/leave-request-dialog";
@@ -16,23 +16,25 @@ export default async function LeavePage() {
   // Admin has no employees row and no leave to manage.
   if (user?.role === "admin") redirect("/");
 
-  const [leaveTypes, { data: balances }, { data: requests }] =
+  const year = new Date().getFullYear();
+  const [leaveTypes, { data: balances }, { data: requests }, holidays] =
     await Promise.all([
       getCachedLeaveTypes(),
       supabase
         .from("leave_balances")
         .select("*, leave_types(name)")
         .eq("employee_id", employee?.id)
-        .eq("year", new Date().getFullYear()),
+        .eq("year", year),
       supabase
         .from("leave_requests")
-        .select("*, leave_types(name)")
+        .select("*, leave_types(name), leave_request_days(date, duration)")
         .eq("employee_id", employee?.id)
         .order("created_at", { ascending: false }),
+      getCachedYearHolidays(year),
     ]);
 
   const grantDrivenOverview = employee
-    ? await getGrantDrivenOverview(supabase, employee.id, new Date().getFullYear())
+    ? await getGrantDrivenOverview(supabase, employee.id, year)
     : [];
 
   // Look up the Compassionate entry so we can keep the existing
@@ -56,6 +58,7 @@ export default async function LeavePage() {
         <LeaveRequestDialog
           leaveTypes={leaveTypes ?? []}
           compassionateAvailable={compassionateEntry?.available ?? 0}
+          holidays={holidays ?? []}
         />
       </div>
 
@@ -72,9 +75,12 @@ export default async function LeavePage() {
         ))}
         <div className="rounded-lg border bg-white p-4">
           <p className="text-sm text-gray-500">Compassionate Leave</p>
-          <p className="mt-1 text-2xl font-bold">{compassionateEntry?.available ?? 0}</p>
+          <p className="mt-1 text-2xl font-bold">
+            {compassionateEntry?.available ?? 0}
+          </p>
           <p className="text-xs text-gray-400">
-            Granted: {compassionateEntry?.granted ?? 0} · Used: {compassionateEntry?.used ?? 0}
+            Granted: {compassionateEntry?.granted ?? 0} · Used:{" "}
+            {compassionateEntry?.used ?? 0}
           </p>
           {(compassionateEntry?.pending ?? 0) > 0 && (
             <p className="mt-1 text-xs text-yellow-700">
