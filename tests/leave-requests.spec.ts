@@ -17,7 +17,7 @@ test.describe("Leave Requests", () => {
     await expect(page.locator("text=Leave Type")).toBeVisible();
     await expect(page.locator("text=Start Date")).toBeVisible();
     await expect(page.locator("text=End Date")).toBeVisible();
-    await expect(page.locator("text=Duration")).toBeVisible();
+    await expect(page.locator("text=Total:")).toBeVisible();
     await expect(page.locator("text=Reason")).toBeVisible();
   });
 
