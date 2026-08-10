@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
+import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { ApprovalList } from "@/components/features/approvals/approval-list";
 import { GrantProposeDialog } from "@/components/features/grants/grant-propose-dialog";
 import { GrantApprovalList } from "@/components/features/grants/grant-approval-list";
@@ -85,10 +86,21 @@ export default async function ApprovalsPage() {
   let directReportsForDialog: { id: string; first_name: string; last_name: string; employee_code: string }[] = [];
 
   if (user?.role === "admin") {
+    const { data: allTypes } = await supabase
+      .from("leave_types")
+      .select("id, name")
+      .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
+    const matchedTypes = (allTypes ?? []).filter((t) =>
+      (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(t.name)
+    );
+    const typeIds = matchedTypes.map((t) => t.id);
+    const typeMap = new Map(matchedTypes.map((t) => [t.id, t.name]));
+
     const { data: raw } = await supabase
       .from("leave_grants")
-      .select("id, employee_id, days, reason, created_at, created_by, status")
+      .select("id, employee_id, leave_type_id, days, reason, created_at, created_by, status")
       .eq("status", "pending")
+      .in("leave_type_id", typeIds)
       .order("created_at", { ascending: true });
     const rows = raw ?? [];
     if (rows.length > 0) {
@@ -105,6 +117,7 @@ export default async function ApprovalsPage() {
           if (!emp || !creator) return null;
           return {
             id: g.id,
+            leave_type_name: typeMap.get(g.leave_type_id) ?? "Unknown",
             days: Number(g.days),
             reason: g.reason,
             created_at: g.created_at,
@@ -124,10 +137,20 @@ export default async function ApprovalsPage() {
     }
   } else if (user?.role === "manager" && currentEmployeeId) {
     // Own grants (any status), newest first.
+    const { data: allTypes } = await supabase
+      .from("leave_types")
+      .select("id, name")
+      .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
+    const matchedTypes = (allTypes ?? []).filter((t) =>
+      (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(t.name)
+    );
+    const typeMap = new Map(matchedTypes.map((t) => [t.id, t.name]));
+
     const { data: raw } = await supabase
       .from("leave_grants")
-      .select("id, employee_id, days, reason, status, created_at, approved_at, rejected_at")
+      .select("id, employee_id, leave_type_id, days, reason, status, created_at, approved_at, rejected_at")
       .eq("created_by", currentEmployeeId)
+      .in("leave_type_id", matchedTypes.map((t) => t.id))
       .order("created_at", { ascending: false });
     const rows = raw ?? [];
     if (rows.length > 0) {
@@ -143,6 +166,7 @@ export default async function ApprovalsPage() {
           if (!emp) return null;
           return {
             id: g.id,
+            leave_type_name: typeMap.get(g.leave_type_id) ?? "Unknown",
             days: Number(g.days),
             reason: g.reason,
             // schema-constrained enum
@@ -186,21 +210,21 @@ export default async function ApprovalsPage() {
 
       {(user?.role === "manager" || user?.role === "admin") && (
         <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold">Compassionate Leave Grants</h2>
+          <h2 className="text-lg font-semibold">Leave Grants</h2>
           <GrantProposeDialog employees={directReportsForDialog} />
         </div>
       )}
 
       {user?.role === "admin" && (
         <section className="mb-8">
-          <h3 className="mb-2 text-sm font-medium text-gray-500">Pending grants</h3>
+          <h3 className="mb-2 text-sm font-medium text-gray-500">Pending leave grants</h3>
           <GrantApprovalList grants={pendingGrants} />
         </section>
       )}
 
       {user?.role === "manager" && (
         <section className="mb-8">
-          <h3 className="mb-2 text-sm font-medium text-gray-500">My grants</h3>
+          <h3 className="mb-2 text-sm font-medium text-gray-500">My leave grants</h3>
           <MyGrantsList grants={myGrants} />
         </section>
       )}
