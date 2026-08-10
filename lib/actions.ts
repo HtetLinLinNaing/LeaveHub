@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
 import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { employeeSchema, leaveRequestSchema, holidaySchema, compassionateGrantSchema, leaveGrantSchema } from "@/lib/validations";
+import { employeeSchema, leaveRequestSchema, holidaySchema, leaveGrantSchema } from "@/lib/validations";
 import { canProposeGrants, canManageGrants } from "@/lib/auth";
 import { getGrantDrivenAvailability } from "@/lib/grants";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";

@@ -27,14 +27,6 @@ export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
 export type EmployeeInput = z.infer<typeof employeeSchema>;
 export type HolidayInput = z.infer<typeof holidaySchema>;
 
-export const compassionateGrantSchema = z.object({
-  employee_id: z.string().uuid(),
-  days: z.number().int().min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
-  reason: z.string().min(1, "Reason is required").max(500, "Reason must be at most 500 characters"),
-});
-
-export type CompassionateGrantInput = z.infer<typeof compassionateGrantSchema>;
-
 export const leaveGrantSchema = z.object({
   employee_id: z.string().uuid(),
   leave_type_name: z.string().min(1, "Leave type is required"),

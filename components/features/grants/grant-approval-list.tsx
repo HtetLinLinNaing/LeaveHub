@@ -176,7 +176,7 @@ export function GrantApprovalList({ grants }: Props) {
           )}
           <p className="text-sm text-gray-600">
             {confirming?.action === "approved"
-              ? "Approving will add the days to the employee's compassionate leave balance. This can't be undone from here."
+              ? `Approving will add the days to the employee's ${confirming.leaveTypeName} balance. This can't be undone from here.`
               : "Rejecting will not change any balances. This can't be undone from here."}
           </p>
           <DialogFooter>
