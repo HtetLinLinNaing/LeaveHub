@@ -5,9 +5,10 @@ import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
 import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
-import { employeeSchema, leaveRequestSchema, holidaySchema, compassionateGrantSchema } from "@/lib/validations";
+import { employeeSchema, leaveRequestSchema, holidaySchema, compassionateGrantSchema, leaveGrantSchema } from "@/lib/validations";
 import { canProposeGrants, canManageGrants } from "@/lib/auth";
-import { getCompassionateAvailability } from "@/lib/compassionate";
+import { getGrantDrivenAvailability } from "@/lib/grants";
+import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import type { Role } from "@/lib/types";
 
 // ----- Tag-based revalidation (existing) -----
@@ -357,18 +358,18 @@ export async function createLeaveRequest(
         .select("id, name")
         .eq("id", input.leave_type_id)
         .single();
-      if (ltForCheck?.name === "Compassionate Leave") {
+      if (ltForCheck && (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(ltForCheck.name)) {
         const year = new Date(input.start_date).getFullYear();
-        const { available } = await getCompassionateAvailability(
+        const { available } = await getGrantDrivenAvailability(
           supabase,
           employee.id,
-          year
+          year,
+          ltForCheck.id
         );
         if (available < actualDays) {
           return {
             ok: false,
-            error:
-              "You have no compassionate leave available. Ask your manager to grant it.",
+            error: `You have no ${ltForCheck.name} available. Ask your manager to grant it.`,
           };
         }
       }
@@ -485,16 +486,17 @@ export async function updateLeaveTypeDays(
   }
 }
 
-// ----- Propose a Compassionate Leave grant (manager or admin) -----
+// ----- Propose a leave grant (manager or admin) -----
 
-export interface CreateCompassionateGrantInput {
+export interface CreateLeaveGrantInput {
   employee_id: string;
+  leave_type_name: string;
   days: number;
   reason: string;
 }
 
-export async function createCompassionateGrant(
-  input: CreateCompassionateGrantInput
+export async function createLeaveGrant(
+  input: CreateLeaveGrantInput
 ): Promise<ApprovalResult> {
   try {
     const { supabase, user, employee } = await requireSession();
@@ -503,7 +505,7 @@ export async function createCompassionateGrant(
     }
     if (!employee) return { ok: false, error: "Proposer record not found" };
 
-    const parsed = compassionateGrantSchema.safeParse(input);
+    const parsed = leaveGrantSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
@@ -526,13 +528,16 @@ export async function createCompassionateGrant(
       };
     }
 
-    // Resolve the compassionate leave_type_id.
+    // Resolve leave type id from name and confirm it's grant-driven.
     const { data: lt } = await supabase
       .from("leave_types")
-      .select("id")
-      .eq("name", "Compassionate Leave")
+      .select("id, name")
+      .eq("name", input.leave_type_name)
       .single();
-    if (!lt) return { ok: false, error: "Compassionate Leave type not found" };
+    if (!lt) return { ok: false, error: "Leave type not found" };
+    if (!(GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(lt.name)) {
+      return { ok: false, error: "This leave type is not grant-driven" };
+    }
 
     const { error: insertError } = await supabase.from("leave_grants").insert({
       employee_id: input.employee_id,
@@ -556,7 +561,7 @@ export async function createCompassionateGrant(
 
 // ----- Approve or reject a pending grant (admin) -----
 
-export async function approveCompassionateGrant(
+export async function approveLeaveGrant(
   grantId: string,
   decision: "approved" | "rejected",
   rejectionReason?: string
