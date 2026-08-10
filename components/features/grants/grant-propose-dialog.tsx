@@ -56,10 +56,12 @@ export function GrantProposeDialog({ employees }: Props) {
     e.preventDefault();
     setError("");
 
-    // Defensive client-side check. base-ui Select occasionally drops
-    // onValueChange in controlled mode, leaving the state empty even
-    // though the trigger shows the chosen label. Catch it here so the
-    // user gets an actionable message instead of "Invalid UUID".
+    // Defensive client-side validation. base-ui's SelectRoot with a
+    // controlled `value=""` can fall through to showing the first item's
+    // label in the trigger even though onValueChange never fired, leaving
+    // employeeId empty when the user submits. Zod then rejects "" with
+    // the cryptic default "Invalid UUID" — catch it here with an
+    // actionable message instead.
     if (!employeeId) {
       setError("Please select an employee");
       return;
@@ -68,7 +70,11 @@ export function GrantProposeDialog({ employees }: Props) {
       setError("Please select a leave type");
       return;
     }
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(employeeId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        employeeId,
+      )
+    ) {
       setError("Employee selection is invalid — please re-pick the employee");
       return;
     }
@@ -119,7 +125,7 @@ export function GrantProposeDialog({ employees }: Props) {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {GRANT_DRIVEN_LEAVE_TYPES.map((name) => (
+                {GRANT_DRIVEN_LEAVE_TYPES.map((name: string) => (
                   <SelectItem key={name} value={name}>
                     {name}
                   </SelectItem>
