@@ -107,7 +107,7 @@ export function LeaveRequestDialog({ leaveTypes, compassionateAvailable }: Props
                 setForm({ ...form, leave_type_id: v ?? "" })
               }
             >
-              <SelectTrigger className="w-50">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select leave type">
                   {form.leave_type_id
                     ? leaveTypes.find((lt) => lt.id === form.leave_type_id)
@@ -125,7 +125,7 @@ export function LeaveRequestDialog({ leaveTypes, compassionateAvailable }: Props
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium">
                 Start Date

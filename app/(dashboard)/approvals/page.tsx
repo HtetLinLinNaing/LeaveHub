@@ -185,7 +185,7 @@ export default async function ApprovalsPage() {
       <h1 className="mb-6 text-2xl font-bold">Pending Approvals</h1>
 
       {(user?.role === "manager" || user?.role === "admin") && (
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">Compassionate Leave Grants</h2>
           <GrantProposeDialog employees={directReportsForDialog} />
         </div>
