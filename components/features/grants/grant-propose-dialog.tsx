@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createCompassionateGrant } from "@/lib/actions";
+import { createLeaveGrant } from "@/lib/actions";
+import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,11 +39,13 @@ export function GrantProposeDialog({ employees }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
+  const [leaveTypeName, setLeaveTypeName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [days, setDays] = useState(1);
   const [reason, setReason] = useState("");
 
   function reset() {
+    setLeaveTypeName("");
     setEmployeeId("");
     setDays(1);
     setReason("");
@@ -53,8 +56,9 @@ export function GrantProposeDialog({ employees }: Props) {
     e.preventDefault();
     setError("");
     startTransition(async () => {
-      const result = await createCompassionateGrant({
+      const result = await createLeaveGrant({
         employee_id: employeeId,
+        leave_type_name: leaveTypeName,
         days,
         reason,
       });
@@ -78,13 +82,34 @@ export function GrantProposeDialog({ employees }: Props) {
     >
       <DialogTrigger render={<Button />}>
         <Plus className="mr-2 h-4 w-4" />
-        Grant Compassionate Leave
+        Propose Grant
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Grant Compassionate Leave</DialogTitle>
+          <DialogTitle>Propose Leave Grant</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Leave Type</label>
+            <Select
+              value={leaveTypeName}
+              onValueChange={(v) => setLeaveTypeName(v ?? "")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select leave type">
+                  {leaveTypeName || undefined}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {GRANT_DRIVEN_LEAVE_TYPES.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium">Employee</label>
             <Select
@@ -157,7 +182,7 @@ export function GrantProposeDialog({ employees }: Props) {
             </Button>
             <Button
               type="submit"
-              disabled={pending || !employeeId || !reason}
+              disabled={pending || !employeeId || !reason || !leaveTypeName}
             >
               {pending ? "Submitting..." : "Submit Grant"}
             </Button>
