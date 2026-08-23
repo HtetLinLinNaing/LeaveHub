@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { approveLeaveRequest } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +40,6 @@ interface Props {
 }
 
 export function ApprovalList({ requests }: Props) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -59,7 +57,6 @@ export function ApprovalList({ requests }: Props) {
         setError(result.error ?? "Failed to update request");
       }
       setProcessingId(null);
-      router.refresh();
     });
   }
 

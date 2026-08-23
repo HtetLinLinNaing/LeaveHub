@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { canViewApprovals, getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/admin";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { ApprovalList } from "@/components/features/approvals/approval-list";
@@ -14,12 +15,48 @@ export default async function ApprovalsPage() {
   const { user, employee } = await getCurrentEmployee(supabase, session?.email);
   const currentEmployeeId = employee?.id ?? null;
 
+  if (!user) {
+    redirect("/login");
+  }
+  if (!canViewApprovals(user.role)) {
+    redirect("/");
+  }
+  if (user.role === "manager" && !currentEmployeeId) {
+    redirect("/");
+  }
+
+  // Scope manager data before loading leave requests. This keeps requests
+  // outside the manager's authorization boundary out of process memory.
+  let scopedEmployeeIds: string[] | null = null;
+  if (user.role === "manager" && currentEmployeeId) {
+    const { data: directReports, error: reportsError } = await supabase
+      .from("employees")
+      .select("id, user_id")
+      .eq("manager_id", currentEmployeeId);
+    if (reportsError) throw reportsError;
+
+    const reportUserIds = (directReports ?? []).map((report) => report.user_id);
+    const { data: reportUsers, error: usersError } = reportUserIds.length
+      ? await supabase.from("users").select("id, role").in("id", reportUserIds)
+      : { data: [] as { id: string; role: string }[], error: null };
+    if (usersError) throw usersError;
+
+    const roleByUserId = new Map((reportUsers ?? []).map((reportUser) => [reportUser.id, reportUser.role]));
+    scopedEmployeeIds = (directReports ?? [])
+      .filter((report) => roleByUserId.get(report.user_id) !== "manager")
+      .map((report) => report.id);
+  }
+
   // ---- Existing leave-request approvals (unchanged data shape) ----
-  const { data: rawRequests } = await supabase
-    .from("leave_requests")
-    .select("id, employee_id, leave_type_id, start_date, end_date, days, duration_type, reason, status, created_at")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
+  const requestQuery = supabase
+      .from("leave_requests")
+      .select("id, employee_id, leave_type_id, start_date, end_date, days, duration_type, reason, status, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+  const { data: rawRequests, error: requestsError } = scopedEmployeeIds?.length === 0
+    ? { data: [], error: null }
+    : await (scopedEmployeeIds ? requestQuery.in("employee_id", scopedEmployeeIds) : requestQuery);
+  if (requestsError) throw requestsError;
 
   const requestRows = rawRequests ?? [];
   let requestsForList: Parameters<typeof ApprovalList>[0]["requests"] = [];

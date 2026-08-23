@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { cancelLeaveRequest } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -107,7 +106,6 @@ function CancelButton({
 }
 
 export function LeaveRequestList({ requests }: { requests: Request[] }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -122,7 +120,6 @@ export function LeaveRequestList({ requests }: { requests: Request[] }) {
         setError(result.error ?? "Failed to cancel request");
       }
       setCancellingId(null);
-      router.refresh();
     });
   }
 

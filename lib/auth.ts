@@ -64,17 +64,19 @@ export const getCurrentEmployee = cache(
     email: string | undefined
   ): Promise<CurrentEmployee> => {
     if (!email) return { user: null, employee: null };
-    const { data: user } = await supabase
+    const { data: user, error: userError } = await supabase
       .from("users")
       .select("id, role")
       .eq("email", email)
-      .single();
+      .maybeSingle();
+    if (userError) throw userError;
     if (!user) return { user: null, employee: null };
-    const { data: employee } = await supabase
+    const { data: employee, error: employeeError } = await supabase
       .from("employees")
       .select("id, first_name, last_name, department, status")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
+    if (employeeError) throw employeeError;
     // Inactive employees are treated as having no record. Admin has no
     // employees row, so the user object is still returned for admin.
     if (employee && employee.status !== "active") {
@@ -90,6 +92,10 @@ export function hasRole(userRole: Role, required: Role[]): boolean {
 
 export function canApproveLeave(userRole: Role): boolean {
   return ["manager", "admin"].includes(userRole);
+}
+
+export function canViewApprovals(userRole: Role): boolean {
+  return canApproveLeave(userRole);
 }
 
 export function canManageEmployees(userRole: Role): boolean {

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/admin";
 import type { LeaveType, Holiday } from "@/lib/types";
@@ -6,11 +8,8 @@ import type { LeaveType, Holiday } from "@/lib/types";
 // at most once per `revalidate` window per arg-set, so subsequent page
 // navigations within that window skip the Supabase round-trip entirely.
 //
-// Mutations (cancel request, add holiday, edit leave type days) call
-// router.refresh() which re-runs the server component; the cached fn
-// returns its memoized value, and once the TTL expires a fresh fetch
-// lands. To invalidate eagerly from a mutation, add a server action
-// that calls revalidateTag() with the matching tag.
+// Mutations invalidate the matching tags in their Server Actions. Next.js
+// then returns the refreshed server payload in the same action round trip.
 
 export const getCachedLeaveTypes = unstable_cache(
   async (): Promise<LeaveType[]> => {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { approveLeaveGrant } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +36,6 @@ interface Props {
 }
 
 export function GrantApprovalList({ grants }: Props) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -66,7 +64,6 @@ export function GrantApprovalList({ grants }: Props) {
         setError(result.error ?? "Failed to update grant");
       }
       setProcessingId(null);
-      router.refresh();
     });
   }
 

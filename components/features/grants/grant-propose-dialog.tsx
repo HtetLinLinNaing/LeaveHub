@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { createLeaveGrant } from "@/lib/actions";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,6 @@ interface Props {
 }
 
 export function GrantProposeDialog({ employees }: Props) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -68,7 +66,6 @@ export function GrantProposeDialog({ employees }: Props) {
       }
       setOpen(false);
       reset();
-      router.refresh();
     });
   }
 
