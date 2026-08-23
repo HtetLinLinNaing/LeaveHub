@@ -1,7 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
-import { createClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/dal/admin-client";
 import type { LeaveType, Holiday } from "@/lib/types";
 
 // Cross-request cached data accessors. The wrapped fns are re-invoked
@@ -13,7 +13,7 @@ import type { LeaveType, Holiday } from "@/lib/types";
 
 export const getCachedLeaveTypes = unstable_cache(
   async (): Promise<LeaveType[]> => {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase.from("leave_types").select("*").order("name");
     return (data ?? []) as LeaveType[];
   },
@@ -23,7 +23,7 @@ export const getCachedLeaveTypes = unstable_cache(
 
 export const getCachedHolidays = unstable_cache(
   async (): Promise<Holiday[]> => {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase.from("holidays").select("*").order("date");
     return (data ?? []) as Holiday[];
   },
@@ -33,7 +33,7 @@ export const getCachedHolidays = unstable_cache(
 
 export const getCachedHolidaysFromDate = unstable_cache(
   async (fromDate: string, limit: number): Promise<Holiday[]> => {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("holidays")
       .select("*")
@@ -48,7 +48,7 @@ export const getCachedHolidaysFromDate = unstable_cache(
 
 export const getCachedYearHolidays = unstable_cache(
   async (year: number): Promise<Holiday[]> => {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("holidays")
       .select("*")

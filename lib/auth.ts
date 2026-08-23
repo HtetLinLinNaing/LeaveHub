@@ -2,6 +2,15 @@ import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Role } from "./types";
 
+export {
+  canApproveLeave,
+  canManageEmployees,
+  canManageGrants,
+  canProposeGrants,
+  canViewApprovals,
+  hasRole,
+} from "@/lib/auth/permissions";
+
 const MOCK_USER_KEY = "leavehub_mock_user";
 
 // The cookie stores ONLY the email. Role and identity are re-derived
@@ -85,27 +94,3 @@ export const getCurrentEmployee = cache(
     return { user, employee: employee ?? null };
   }
 );
-
-export function hasRole(userRole: Role, required: Role[]): boolean {
-  return required.includes(userRole);
-}
-
-export function canApproveLeave(userRole: Role): boolean {
-  return ["manager", "admin"].includes(userRole);
-}
-
-export function canViewApprovals(userRole: Role): boolean {
-  return canApproveLeave(userRole);
-}
-
-export function canManageEmployees(userRole: Role): boolean {
-  return userRole === "admin";
-}
-
-export function canProposeGrants(userRole: Role): boolean {
-  return ["manager", "admin"].includes(userRole);
-}
-
-export function canManageGrants(userRole: Role): boolean {
-  return userRole === "admin";
-}

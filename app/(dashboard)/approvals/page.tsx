@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { canViewApprovals, getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
+import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
+import { canViewApprovals } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/admin";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { ApprovalList } from "@/components/features/approvals/approval-list";

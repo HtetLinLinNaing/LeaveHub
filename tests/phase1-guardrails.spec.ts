@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import * as auth from "../lib/auth";
+import { resolveActor } from "../lib/auth/actor";
+import { canViewApprovals } from "../lib/auth/permissions";
 import * as validations from "../lib/validations";
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -17,17 +18,12 @@ function schema(name: string): Schema {
 
 test.describe("Phase 1 server entry-point guardrails", () => {
   test("only managers and admins can access approvals", () => {
-    const canViewApprovals = (
-      auth as unknown as Record<string, unknown>
-    ).canViewApprovals as ((role: string) => boolean) | undefined;
-
-    expect(canViewApprovals, "canViewApprovals must be exported").toBeDefined();
-    expect(canViewApprovals?.("employee")).toBe(false);
-    expect(canViewApprovals?.("manager")).toBe(true);
-    expect(canViewApprovals?.("admin")).toBe(true);
+    expect(canViewApprovals("employee")).toBe(false);
+    expect(canViewApprovals("manager")).toBe(true);
+    expect(canViewApprovals("admin")).toBe(true);
   });
 
-  test("session lookup propagates database failures instead of treating them as logout", async () => {
+  test("actor lookup propagates database failures instead of treating them as logout", async () => {
     const databaseError = new Error("database unavailable");
     const supabase = {
       from: () => ({
@@ -39,9 +35,9 @@ test.describe("Phase 1 server entry-point guardrails", () => {
       }),
     } as unknown as SupabaseClient;
 
-    await expect(auth.getCurrentEmployee(supabase, "employee@example.com")).rejects.toThrow(
-      "database unavailable"
-    );
+    await expect(
+      resolveActor("auth-user-id", "employee@example.com", supabase)
+    ).rejects.toThrow("database unavailable");
   });
 
   test("leave approval input requires a UUID and known decision", () => {

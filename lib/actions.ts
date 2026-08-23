@@ -3,7 +3,13 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
-import { getSessionFromRequest, getCurrentEmployee, canApproveLeave, canManageEmployees } from "@/lib/auth";
+import { getSessionFromRequest, getCurrentEmployee } from "@/lib/auth";
+import {
+  canApproveLeave,
+  canManageEmployees,
+  canManageGrants,
+  canProposeGrants,
+} from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/admin";
 import {
   createLeaveRequestSchema,
@@ -16,7 +22,6 @@ import {
   updateEmployeeStatusActionSchema,
   updateLeaveTypeDaysActionSchema,
 } from "@/lib/validations";
-import { canProposeGrants, canManageGrants } from "@/lib/auth";
 import { getGrantDrivenAvailability } from "@/lib/grants";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { actionFailure, ExpectedActionError } from "@/lib/action-errors";

@@ -1,13 +1,203 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveActor } from "../lib/auth/actor";
+import {
+  canApproveLeave,
+  canManageEmployees,
+  canManageGrants,
+  canProposeGrants,
+  canViewApprovals,
+  hasRole,
+} from "../lib/auth/permissions";
 import { readSupabasePublicEnv } from "../lib/supabase/env";
 import { isPublicPath } from "../lib/supabase/proxy";
 import { config } from "../proxy";
 
 const migration = readFileSync("supabase/migrations/009_supabase_password_auth.sql", "utf8");
 
+type ActorQueryRow = Record<string, unknown> | null;
+
+function createActorDatabase({
+  user,
+  employee,
+  employeeError = null,
+}: {
+  user: ActorQueryRow;
+  employee: ActorQueryRow;
+  employeeError?: Error | null;
+}) {
+  return {
+    from: (table: string) => ({
+      select: (columns: string) => ({
+        eq: (column: string, value: string) => ({
+          maybeSingle: async () => {
+            if (
+              table === "users" &&
+              columns === "id,email,role" &&
+              column === "auth_user_id" &&
+              value === "auth-user-id"
+            ) {
+              return { data: user, error: null };
+            }
+            if (
+              table === "employees" &&
+              columns === "id,first_name,last_name,department,status" &&
+              column === "user_id" &&
+              value === "app-user-id"
+            ) {
+              return { data: employee, error: employeeError };
+            }
+            throw new Error(`Unexpected actor query: ${table}.${columns}.${column}.${value}`);
+          },
+        }),
+      }),
+    }),
+  } as unknown as SupabaseClient;
+}
+
 test.describe("Phase 2 authentication contracts", () => {
+  test("resolves a linked active employee to the approved Actor shape", async () => {
+    const db = createActorDatabase({
+      user: {
+        id: "app-user-id",
+        email: "database@example.com",
+        role: "employee",
+      },
+      employee: {
+        id: "employee-id",
+        first_name: "Ada",
+        last_name: "Lovelace",
+        department: "Engineering",
+        status: "active",
+      },
+    });
+
+    await expect(
+      resolveActor("auth-user-id", "claims@example.com", db)
+    ).resolves.toEqual({
+      authUserId: "auth-user-id",
+      userId: "app-user-id",
+      email: "database@example.com",
+      role: "employee",
+      employee: {
+        id: "employee-id",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        department: "Engineering",
+      },
+    });
+  });
+
+  test("accepts a linked admin without an employee row", async () => {
+    const db = createActorDatabase({
+      user: { id: "app-user-id", email: "admin@example.com", role: "admin" },
+      employee: null,
+    });
+
+    await expect(
+      resolveActor("auth-user-id", "admin@example.com", db)
+    ).resolves.toEqual({
+      authUserId: "auth-user-id",
+      userId: "app-user-id",
+      email: "admin@example.com",
+      role: "admin",
+      employee: null,
+    });
+  });
+
+  test("rejects an unlinked Auth identity", async () => {
+    const db = createActorDatabase({ user: null, employee: null });
+
+    await expect(
+      resolveActor("auth-user-id", "unknown@example.com", db)
+    ).resolves.toBeNull();
+  });
+
+  test("rejects an inactive employee", async () => {
+    const db = createActorDatabase({
+      user: {
+        id: "app-user-id",
+        email: "inactive@example.com",
+        role: "employee",
+      },
+      employee: {
+        id: "employee-id",
+        first_name: "Inactive",
+        last_name: "Employee",
+        department: "Operations",
+        status: "inactive",
+      },
+    });
+
+    await expect(
+      resolveActor("auth-user-id", "inactive@example.com", db)
+    ).resolves.toBeNull();
+  });
+
+  for (const role of ["employee", "manager"] as const) {
+    test(`rejects a linked ${role} without an employee row`, async () => {
+      const db = createActorDatabase({
+        user: { id: "app-user-id", email: `${role}@example.com`, role },
+        employee: null,
+      });
+
+      await expect(
+        resolveActor("auth-user-id", `${role}@example.com`, db)
+      ).resolves.toBeNull();
+    });
+  }
+
+  test("propagates employee lookup failures", async () => {
+    const db = createActorDatabase({
+      user: {
+        id: "app-user-id",
+        email: "employee@example.com",
+        role: "employee",
+      },
+      employee: null,
+      employeeError: new Error("employee lookup unavailable"),
+    });
+
+    await expect(
+      resolveActor("auth-user-id", "employee@example.com", db)
+    ).rejects.toThrow("employee lookup unavailable");
+  });
+
+  test("preserves the Phase 1 permission matrix", () => {
+    const roles = ["employee", "manager", "admin"] as const;
+
+    expect(hasRole("manager", ["employee", "manager"])).toBe(true);
+    expect(hasRole("admin", ["employee", "manager"])).toBe(false);
+
+    expect(roles.map(canApproveLeave)).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(roles.map(canViewApprovals)).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(roles.map(canManageEmployees)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(roles.map(canProposeGrants)).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(roles.map(canManageGrants)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+  });
+
   test("maps Auth identities without changing application IDs", () => {
     expect(migration).toContain("ADD COLUMN IF NOT EXISTS auth_user_id UUID");
     expect(migration).toContain("SET auth_user_id = id");
