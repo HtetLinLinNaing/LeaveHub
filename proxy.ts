@@ -1,33 +1,49 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getMockSessionFromCookie } from "@/lib/auth";
+import {
+  isPublicPath,
+  refreshAuthSession,
+} from "@/lib/supabase/proxy";
 
-const publicPaths = ["/login"];
+const REFRESH_RESPONSE_HEADERS = ["cache-control", "expires", "pragma"];
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+function redirectWithRefreshCookies(
+  request: NextRequest,
+  destination: string,
+  refreshResponse: NextResponse
+) {
+  const redirectResponse = NextResponse.redirect(
+    new URL(destination, request.url)
+  );
 
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
+  refreshResponse.cookies
+    .getAll()
+    .forEach((cookie) => redirectResponse.cookies.set(cookie));
+
+  for (const name of REFRESH_RESPONSE_HEADERS) {
+    const value = refreshResponse.headers.get(name);
+    if (value) redirectResponse.headers.set(name, value);
   }
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/auth") ||
-    pathname.includes(".")
-  ) {
-    return NextResponse.next();
+  return redirectResponse;
+}
+
+export async function proxy(request: NextRequest) {
+  const { response, authenticated } = await refreshAuthSession(request);
+  const publicPath = isPublicPath(request.nextUrl.pathname);
+
+  if (!authenticated && !publicPath) {
+    return redirectWithRefreshCookies(request, "/login", response);
   }
 
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const session = getMockSessionFromCookie(cookieHeader);
-
-  if (!session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (authenticated && publicPath) {
+    return redirectWithRefreshCookies(request, "/", response);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:css|js|mjs|map|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|otf|eot)$).*)",
+  ],
 };
