@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +31,6 @@ function StatusToggle({
 }: {
   employee: Employee;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
 
@@ -51,7 +49,6 @@ function StatusToggle({
         console.error(result.error);
       }
       setConfirming(false);
-      router.refresh();
     });
   }
 

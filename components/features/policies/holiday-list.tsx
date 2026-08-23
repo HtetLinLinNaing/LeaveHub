@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { deleteHoliday } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
@@ -10,7 +9,6 @@ import { Trash2 } from "lucide-react";
 import type { Holiday } from "@/lib/types";
 
 export function HolidayList({ holidays }: { holidays: Holiday[] }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -24,7 +22,6 @@ export function HolidayList({ holidays }: { holidays: Holiday[] }) {
         setError(result.error ?? "Failed to delete holiday");
       }
       setDeletingId(null);
-      router.refresh();
     });
   }
 

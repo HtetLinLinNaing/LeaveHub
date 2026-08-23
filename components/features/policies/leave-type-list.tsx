@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { updateLeaveTypeDays } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable, type Column } from "@/components/shared/responsive-table";
@@ -9,7 +8,6 @@ import type { LeaveType } from "@/lib/types";
 import { Pencil, Save, X } from "lucide-react";
 
 export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
-  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDays, setEditDays] = useState(0);
   const [pending, startTransition] = useTransition();
@@ -29,7 +27,6 @@ export function LeaveTypeList({ leaveTypes }: { leaveTypes: LeaveType[] }) {
         return;
       }
       setEditingId(null);
-      router.refresh();
     });
   }
 

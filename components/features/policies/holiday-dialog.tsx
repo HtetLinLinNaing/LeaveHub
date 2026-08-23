@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { createHoliday } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +16,6 @@ export function HolidayDialog() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const router = useRouter();
   const [form, setForm] = useState({ name: "", date: "" });
 
   const initialForm = { name: "", date: "" };
@@ -44,7 +42,6 @@ export function HolidayDialog() {
       }
       setOpen(false);
       setForm({ name: "", date: "" });
-      router.refresh();
     });
   }
 

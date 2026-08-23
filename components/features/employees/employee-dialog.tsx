@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { createEmployee } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +21,6 @@ export function EmployeeDialog() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const router = useRouter();
 
   const initialForm = {
     first_name: "",
@@ -66,7 +64,6 @@ export function EmployeeDialog() {
 
       setOpen(false);
       resetForm();
-      router.refresh();
     });
   }
 

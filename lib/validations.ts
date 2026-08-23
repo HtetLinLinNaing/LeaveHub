@@ -2,6 +2,37 @@ import { z } from "zod";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
+export const resourceIdSchema = z.string().uuid("Invalid identifier");
+
+export const mockLoginRequestSchema = z.object({
+  email: z.string().email("Invalid email").max(254, "Email is too long"),
+}).strict();
+
+export const approveLeaveRequestActionSchema = z.object({
+  requestId: resourceIdSchema,
+  action: z.enum(["approved", "rejected"]),
+});
+
+export const updateEmployeeStatusActionSchema = z.object({
+  employeeId: resourceIdSchema,
+  status: z.enum(["active", "inactive"]),
+});
+
+export const updateLeaveTypeDaysActionSchema = z.object({
+  leaveTypeId: resourceIdSchema,
+  annualDays: z
+    .number()
+    .int("Days must be a whole number")
+    .min(0, "Days must be non-negative")
+    .max(2_147_483_647, "Days exceed the database limit"),
+});
+
+export const approveLeaveGrantActionSchema = z.object({
+  grantId: resourceIdSchema,
+  decision: z.enum(["approved", "rejected"]),
+  rejectionReason: z.string().max(500).optional(),
+});
+
 // Single duration picker, drives one row in leave_request_days.
 export const dayDurationSchema = z.enum([
   "full_day",
@@ -33,7 +64,7 @@ export const mcMetaSchema = z
 // Backwards-compatible duration_type — kept on the parent row so existing
 // approval / calendar / dashboard code keeps reading the same shape.
 export const leaveRequestSchema = z.object({
-  leave_type_id: z.string().uuid(),
+  leave_type_id: resourceIdSchema,
   start_date: dateString,
   end_date: dateString,
   duration_type: z.enum(["full_day", "half_day"]),
@@ -49,7 +80,7 @@ export const leaveRequestDaySchema = z.object({
 });
 
 export const createLeaveRequestSchema = z.object({
-  leave_type_id: z.string().uuid(),
+  leave_type_id: resourceIdSchema,
   start_date: dateString,
   end_date: dateString,
   days: z.array(leaveRequestDaySchema).min(1, "Select at least one day"),
@@ -71,7 +102,7 @@ export const employeeSchema = z.object({
   last_name: z.string().min(1).max(100),
   email: z.string().email(),
   department: z.string().min(1).max(100),
-  manager_id: z.string().uuid().nullable().optional(),
+  manager_id: resourceIdSchema.nullable().optional(),
   join_date: dateString,
   role: z.enum(["employee"]),
 });
@@ -85,7 +116,7 @@ export type EmployeeInput = z.infer<typeof employeeSchema>;
 export type HolidayInput = z.infer<typeof holidaySchema>;
 
 export const leaveGrantSchema = z.object({
-  employee_id: z.string().uuid(),
+  employee_id: resourceIdSchema,
   leave_type_name: z.string().min(1, "Leave type is required"),
   days: z.number().int().min(1, "Days must be at least 1").max(365, "Days must be at most 365"),
   reason: z.string().min(1, "Reason is required").max(500, "Reason must be at most 500 characters"),

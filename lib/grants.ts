@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 
@@ -49,6 +51,10 @@ export async function getGrantDrivenAvailability(
       .eq("status", "pending"),
   ]);
 
+  for (const result of [grantedRes, usedRes, pendingRes]) {
+    if (result.error) throw result.error;
+  }
+
   const sum = (rows: { days: number }[] | null) =>
     (rows ?? []).reduce((acc, r) => acc + Number(r.days), 0);
 
@@ -70,10 +76,11 @@ export async function getGrantDrivenOverview(
   employeeId: string,
   year: number
 ): Promise<GrantDrivenOverviewEntry[]> {
-  const { data: types } = await supabase
+  const { data: types, error: typesError } = await supabase
     .from("leave_types")
     .select("id, name")
     .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
+  if (typesError) throw typesError;
 
   const matched = (types ?? []).filter((t): t is { id: string; name: string } =>
     (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(t.name)

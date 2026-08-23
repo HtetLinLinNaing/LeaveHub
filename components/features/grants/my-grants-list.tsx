@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { cancelPendingGrant } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +40,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function MyGrantsList({ grants }: Props) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -65,7 +63,6 @@ export function MyGrantsList({ grants }: Props) {
         setError(result.error ?? "Failed to cancel grant");
       }
       setCancellingId(null);
-      router.refresh();
     });
   }
 

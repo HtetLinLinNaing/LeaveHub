@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { createLeaveRequest, uploadMcCertificate } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
@@ -62,7 +61,6 @@ export function LeaveRequestDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const router = useRouter();
   const [mcFile, setMcFile] = useState<File | null>(null);
   const [mcMeta, setMcMeta] = useState<{ path: string; name: string } | null>(
     null,
@@ -176,7 +174,6 @@ export function LeaveRequestDialog({
 
       setOpen(false);
       resetForm();
-      router.refresh();
     });
   }
 

@@ -19,6 +19,14 @@ test.describe("Approvals", () => {
     await expect(page.locator("nav >> text=Approvals")).not.toBeVisible();
   });
 
+  test("employee is blocked from the direct approvals URL", async ({ page }) => {
+    await login(page, USERS.employee.email);
+    await page.goto("/approvals");
+
+    await expect(page).toHaveURL("/");
+    await expect(page.locator("h1")).toContainText("Welcome");
+  });
+
   test("shows empty state when no pending requests", async ({ page }) => {
     await login(page, USERS.manager.email);
     await navigateTo(page, "Approvals");
