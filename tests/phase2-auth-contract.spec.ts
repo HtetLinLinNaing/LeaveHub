@@ -4,9 +4,14 @@ import {
   AuthApiError,
   AuthRetryableFetchError,
 } from "@supabase/supabase-js";
-import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import {
+  getRedirectUrl,
+  unstable_doesMiddlewareMatch,
+} from "next/experimental/testing/server";
+import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveActor } from "../lib/auth/actor";
+import { parseLoginFormData } from "../lib/auth/login-input";
 import {
   authenticatePassword,
   loginFailureState,
@@ -20,13 +25,19 @@ import {
   canViewApprovals,
   hasRole,
 } from "../lib/auth/permissions";
+import { getSupabaseCookieOptions } from "../lib/supabase/cookie-options";
 import { readSupabasePublicEnv } from "../lib/supabase/env";
-import { isPublicPath } from "../lib/supabase/proxy";
+import {
+  applyCookieMutations,
+  isPublicPath,
+} from "../lib/supabase/proxy";
 import { loginSchema } from "../lib/validations";
-import { config } from "../proxy";
+import { config, routeRefreshedSession } from "../proxy";
 
 const migration = readFileSync("supabase/migrations/009_supabase_password_auth.sql", "utf8");
 const legacyAuthMigration = readFileSync("supabase/migrations/003_add_auth_fk.sql", "utf8");
+const serverClientSource = readFileSync("lib/supabase/server.ts", "utf8");
+const proxyClientSource = readFileSync("lib/supabase/proxy.ts", "utf8");
 
 const protectedServerComponents = [
   "app/(dashboard)/layout.tsx",
@@ -116,6 +127,24 @@ function createPasswordDependencies({
 }
 
 test.describe("Phase 2 authentication contracts", () => {
+  test("ignores Next Server Action metadata when parsing login fields", () => {
+    const formData = new FormData();
+    formData.set("email", "employee@example.com");
+    formData.set("password", "password");
+    formData.set("$ACTION_REF_1", "server-action-reference");
+    formData.set("$ACTION_1:0", "server-action-bound-argument");
+
+    const parsed = parseLoginFormData(formData);
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toEqual({
+        email: "employee@example.com",
+        password: "password",
+      });
+    }
+  });
+
   test("rejects malformed login email addresses", () => {
     expect(
       loginSchema.safeParse({ email: "not-an-email", password: "password" })
@@ -438,10 +467,123 @@ test.describe("Phase 2 authentication contracts", () => {
     });
   });
 
+  test("uses the same hardened cookie options in both SSR clients", () => {
+    expect(getSupabaseCookieOptions("development")).toEqual({
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: false,
+    });
+    expect(getSupabaseCookieOptions("production")).toEqual({
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: true,
+    });
+
+    for (const source of [serverClientSource, proxyClientSource]) {
+      expect(source).toContain(
+        'import { getSupabaseCookieOptions } from "./cookie-options"'
+      );
+      expect(source).toContain("cookieOptions: getSupabaseCookieOptions()");
+    }
+  });
+
+  for (const { nodeEnv, secure } of [
+    { nodeEnv: "development", secure: false },
+    { nodeEnv: "production", secure: true },
+  ] as const) {
+    test(`preserves hardened ${nodeEnv} cookies through Proxy mutation and redirect`, () => {
+      const request = new NextRequest("https://leavehub.example/leave");
+      const refreshResponse = NextResponse.next({ request });
+      const options = getSupabaseCookieOptions(nodeEnv);
+      const cookieName = "sb-project-auth-token";
+
+      applyCookieMutations(refreshResponse, [
+        { name: cookieName, value: "opaque-session", options },
+      ]);
+      refreshResponse.headers.set(
+        "cache-control",
+        "private, no-cache, no-store, must-revalidate, max-age=0"
+      );
+      refreshResponse.headers.set("expires", "0");
+      refreshResponse.headers.set("pragma", "no-cache");
+
+      expect(refreshResponse.cookies.get(cookieName)).toMatchObject({
+        name: cookieName,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure,
+      });
+
+      const redirectResponse = routeRefreshedSession(request, {
+        response: refreshResponse,
+        authenticated: false,
+      });
+
+      expect(redirectResponse.cookies.get(cookieName)).toMatchObject({
+        name: cookieName,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure,
+      });
+      expect(redirectResponse.headers.get("cache-control")).toBe(
+        "private, no-cache, no-store, must-revalidate, max-age=0"
+      );
+      expect(redirectResponse.headers.get("expires")).toBe("0");
+      expect(redirectResponse.headers.get("pragma")).toBe("no-cache");
+
+      const setCookie = redirectResponse.headers.get("set-cookie") ?? "";
+      expect(setCookie).toContain("Path=/");
+      expect(setCookie).toContain("HttpOnly");
+      expect(setCookie).toContain("SameSite=lax");
+      expect(setCookie.includes("Secure")).toBe(secure);
+    });
+  }
+
   test("treats only the login page as public", () => {
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/")).toBe(false);
     expect(isPublicPath("/leave")).toBe(false);
+  });
+
+  test("keeps login reachable for claims-bearing sessions rejected by actor verification", () => {
+    const request = new NextRequest("https://leavehub.example/login");
+    const refreshResponse = NextResponse.next({ request });
+
+    const response = routeRefreshedSession(request, {
+      response: refreshResponse,
+      authenticated: true,
+    });
+
+    expect(response).toBe(refreshResponse);
+    expect(getRedirectUrl(response)).toBeNull();
+  });
+
+  test("redirects a claims-missing protected request to login", () => {
+    const request = new NextRequest("https://leavehub.example/leave");
+
+    const response = routeRefreshedSession(request, {
+      response: NextResponse.next({ request }),
+      authenticated: false,
+    });
+
+    expect(getRedirectUrl(response)).toBe("https://leavehub.example/login");
+  });
+
+  test("leaves claims-bearing protected requests for secure actor verification", () => {
+    const request = new NextRequest("https://leavehub.example/leave");
+    const refreshResponse = NextResponse.next({ request });
+
+    const response = routeRefreshedSession(request, {
+      response: refreshResponse,
+      authenticated: true,
+    });
+
+    expect(response).toBe(refreshResponse);
+    expect(getRedirectUrl(response)).toBeNull();
   });
 
   test("excludes framework and static assets from Proxy", () => {

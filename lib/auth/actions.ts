@@ -2,13 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { resolveActor } from "@/lib/auth/actor";
+import { parseLoginFormData } from "@/lib/auth/login-input";
 import {
   authenticatePassword,
   loginFailureState,
 } from "@/lib/auth/password";
 import { createAdminClient } from "@/lib/dal/admin-client";
 import { createAuthClient } from "@/lib/supabase/server";
-import { loginSchema } from "@/lib/validations";
 
 export type LoginState = { error?: string };
 
@@ -16,7 +16,7 @@ export async function login(
   _previous: LoginState,
   formData: FormData
 ): Promise<LoginState> {
-  const parsed = loginSchema.safeParse(Object.fromEntries(formData.entries()));
+  const parsed = parseLoginFormData(formData);
   if (!parsed.success) {
     return { error: "Enter a valid email and password." };
   }

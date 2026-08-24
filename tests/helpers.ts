@@ -12,6 +12,16 @@ export function requireDemoAuthPassword(env: DemoAuthEnvironment): string {
 }
 
 const DEMO_PASSWORD = requireDemoAuthPassword(process.env);
+const WRONG_PASSWORD_CANDIDATES = [
+  "leavehub-known-wrong-password-a",
+  "leavehub-known-wrong-password-b",
+] as const;
+
+export function deriveWrongDemoAuthPassword(demoPassword: string): string {
+  return WRONG_PASSWORD_CANDIDATES.find(
+    (candidate) => candidate !== demoPassword
+  )!;
+}
 
 export const USERS = {
   manager: { email: "bob@company.com", role: "Manager" },

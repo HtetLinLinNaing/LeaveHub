@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { getSupabaseCookieOptions } from "./cookie-options";
 import { readSupabasePublicEnv } from "./env";
 
 type CookieMutation = {
@@ -12,12 +13,22 @@ export function isPublicPath(pathname: string) {
   return pathname === "/login";
 }
 
+export function applyCookieMutations(
+  response: NextResponse,
+  mutations: readonly CookieMutation[]
+) {
+  mutations.forEach(({ name, value, options }) =>
+    response.cookies.set(name, value, options)
+  );
+}
+
 export async function refreshAuthSession(request: NextRequest) {
   const { url, key } = readSupabasePublicEnv();
   const cookieMutations: CookieMutation[] = [];
   const responseHeaders = new Headers();
 
   const auth = createServerClient(url, key, {
+    cookieOptions: getSupabaseCookieOptions(),
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (items, headers) => {
@@ -35,9 +46,7 @@ export async function refreshAuthSession(request: NextRequest) {
   const { data } = await auth.auth.getClaims();
   const response = NextResponse.next({ request });
 
-  cookieMutations.forEach(({ name, value, options }) =>
-    response.cookies.set(name, value, options)
-  );
+  applyCookieMutations(response, cookieMutations);
   responseHeaders.forEach((value, name) => response.headers.set(name, value));
 
   return { response, authenticated: Boolean(data?.claims) };

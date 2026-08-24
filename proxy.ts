@@ -27,19 +27,23 @@ function redirectWithRefreshCookies(
   return redirectResponse;
 }
 
-export async function proxy(request: NextRequest) {
-  const { response, authenticated } = await refreshAuthSession(request);
+type RefreshedSession = Awaited<ReturnType<typeof refreshAuthSession>>;
+
+export function routeRefreshedSession(
+  request: NextRequest,
+  { response, authenticated }: RefreshedSession
+) {
   const publicPath = isPublicPath(request.nextUrl.pathname);
 
   if (!authenticated && !publicPath) {
     return redirectWithRefreshCookies(request, "/login", response);
   }
 
-  if (authenticated && publicPath) {
-    return redirectWithRefreshCookies(request, "/", response);
-  }
-
   return response;
+}
+
+export async function proxy(request: NextRequest) {
+  return routeRefreshedSession(request, await refreshAuthSession(request));
 }
 
 export const config = {

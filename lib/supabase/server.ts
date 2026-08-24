@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getSupabaseCookieOptions } from "./cookie-options";
 import { readSupabasePublicEnv } from "./env";
 
 export async function createAuthClient() {
@@ -8,6 +9,7 @@ export async function createAuthClient() {
   const { url, key } = readSupabasePublicEnv();
 
   return createServerClient(url, key, {
+    cookieOptions: getSupabaseCookieOptions(),
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (items) => {

@@ -1,5 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { login, logout, USERS } from "./helpers";
+import {
+  deriveWrongDemoAuthPassword,
+  login,
+  logout,
+  requireDemoAuthPassword,
+  USERS,
+} from "./helpers";
+
+const WRONG_PASSWORD = deriveWrongDemoAuthPassword(
+  requireDemoAuthPassword(process.env)
+);
 
 test.describe("Authentication", () => {
   test("redirects unauthenticated user to login", async ({ page }) => {
@@ -18,7 +28,7 @@ test.describe("Authentication", () => {
   test("rejects invalid credentials without revealing account existence", async ({ page }) => {
     await page.goto("/login");
     await page.fill('input[name="email"]', "unknown@gmail.com");
-    await page.fill('input[name="password"]', "definitely-not-the-demo-password");
+    await page.fill('input[name="password"]', WRONG_PASSWORD);
     await page.click('button[type="submit"]');
     await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
     await expect(page).toHaveURL(/\/login/);
@@ -27,7 +37,7 @@ test.describe("Authentication", () => {
   test("rejects a known email with the same generic invalid-credential message", async ({ page }) => {
     await page.goto("/login");
     await page.fill('input[name="email"]', USERS.admin.email);
-    await page.fill('input[name="password"]', "definitely-not-the-demo-password");
+    await page.fill('input[name="password"]', WRONG_PASSWORD);
     await page.click('button[type="submit"]');
     await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
     await expect(page).toHaveURL(/\/login/);

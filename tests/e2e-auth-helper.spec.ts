@@ -21,6 +21,30 @@ test.afterAll(() => {
 });
 
 test.describe("E2E auth helper", () => {
+  test("derives a schema-valid wrong password different from the demo password", () => {
+    const firstCandidate = "leavehub-known-wrong-password-a";
+    const secondCandidate = "leavehub-known-wrong-password-b";
+
+    expect(authHelpers.deriveWrongDemoAuthPassword(firstCandidate)).toBe(
+      secondCandidate
+    );
+    expect(authHelpers.deriveWrongDemoAuthPassword(secondCandidate)).toBe(
+      firstCandidate
+    );
+
+    for (const demoPassword of [
+      firstCandidate,
+      secondCandidate,
+      "configured-demo-password",
+    ]) {
+      const wrongPassword =
+        authHelpers.deriveWrongDemoAuthPassword(demoPassword);
+      expect(wrongPassword).not.toBe(demoPassword);
+      expect(wrongPassword.length).toBeGreaterThan(0);
+      expect(wrongPassword.length).toBeLessThanOrEqual(128);
+    }
+  });
+
   test("rejects a Playwright process without the demo password", () => {
     expect(() => authHelpers.requireDemoAuthPassword({})).toThrow(
       "Missing DEMO_AUTH_PASSWORD for E2E auth tests"
