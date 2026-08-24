@@ -35,24 +35,37 @@ cd LeaveHub-V2
 npm install
 ```
 
-2. Copy `.env.local.example` to `.env.local` and add your Supabase credentials:
+2. Copy `.env.local.example` to `.env.local` and add your Supabase credentials.
+   Keep the service-role key server-only:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+ALLOW_DEMO_AUTH_BOOTSTRAP=false
+DEMO_AUTH_PASSWORD=replace-with-at-least-12-characters
 ```
 
-3. Run migrations in Supabase SQL Editor:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_seed_data.sql`
+3. Apply all migrations from `001` through `009` in filename order. Read the
+   [migration deployment guide](supabase/migrations/README.md) before applying
+   `009`; migration and bootstrap work must target an approved local/disposable
+   project.
 
-4. Start dev server:
+4. Bootstrap the demo Auth identities once. Set
+   `ALLOW_DEMO_AUTH_BOOTSTRAP=true`, run the command, review its counts, then
+   immediately set the flag back to `false` or remove it:
+
+```bash
+npm run auth:bootstrap-demo
+```
+
+5. Start the dev server:
 
 ```bash
 npm run dev
 ```
 
-5. Login with seed accounts:
+6. Login with the configured `DEMO_AUTH_PASSWORD` and a seed account:
    - `bob@company.com` — Manager
    - `charlie@company.com` — Employee
    - `diana@company.com` — Employee
@@ -66,14 +79,19 @@ Run in order via SQL Editor:
 |------|---------|
 | `001_initial_schema.sql` | Tables, indexes, functions, dev RLS policies |
 | `002_seed_data.sql` | Sample users, employees, leave balances, holidays |
-| `003_add_auth_fk.sql` | Link users to Supabase Auth (when switching to Google OAuth) |
-| `004_strict_rls.sql` | Production RLS policies (when switching to Google OAuth) |
+| `003_add_auth_fk.sql` | Initial Auth identity constraint |
+| `004_strict_rls.sql` | Strict role-based RLS policies |
+| `005_fix_rls_recursion.sql` | Non-recursive role helpers |
+| `006_fix_employees_recursion.sql` | Non-recursive employee helpers |
+| `007_compassionate_grants.sql` | Compassionate leave grants |
+| `008_mixed_durations_emergency_mc.sql` | Mixed durations, emergency contacts, and MC metadata |
+| `009_supabase_password_auth.sql` | Durable Auth identity link and removal of remaining anonymous policies |
 
 ## Project Structure
 
 ```
 app/
-├── (auth)/login/          # Login page
+├── (auth)/login/          # Supabase password login page
 ├── (dashboard)/           # Protected routes
 │   ├── page.tsx           # Dashboard (role-aware)
 │   ├── leave/             # Leave requests
@@ -81,7 +99,6 @@ app/
 │   ├── employees/         # Admin: employee management
 │   ├── policies/          # Admin: leave types + holidays
 │   └── calendar/          # Team calendar
-├── api/auth/mock-login/   # Mock auth endpoint
 components/
 ├── ui/                    # shadcn/ui components
 ├── features/              # Feature components
@@ -92,8 +109,9 @@ components/
 │   └── calendar/          # Team calendar grid
 ├── shared/                # Sidebar, shared layouts
 lib/
-├── supabase/              # Supabase client (server + browser)
-├── auth.ts                # Mock auth utilities
+├── auth/                  # Password login, logout, and verified sessions
+├── dal/                   # Server-only actor-scoped data access
+├── supabase/              # Supabase clients (server + browser)
 ├── types.ts               # TypeScript types
 ├── validations.ts         # Zod schemas
 └── constants.ts           # Roles, status colors
@@ -102,16 +120,20 @@ supabase/migrations/       # SQL migration files
 
 ## Auth
 
-Currently using mock auth (cookie-based session). To switch to Google OAuth:
-
-1. Configure Google provider in Supabase Dashboard > Authentication > Providers
-2. Run `003_add_auth_fk.sql` to add FK constraint
-3. Run `004_strict_rls.sql` to enable production RLS policies
-4. Replace mock auth with Supabase Auth in `lib/auth.ts`
+LeaveHub uses Supabase email/password authentication with HttpOnly SSR session
+cookies. Roles and employee status come from LeaveHub tables through the verified
+`auth_user_id` link. Public signup is not enabled; demo accounts are provisioned
+only through the explicit administrative bootstrap command.
 
 ## Deployment
 
-Deploy to Vercel:
+Follow the backup, preflight, migration `009`, one-time bootstrap, smoke-test, and
+rollback procedure in [the migration deployment guide](supabase/migrations/README.md).
+In particular, remove `ALLOW_DEMO_AUTH_BOOTSTRAP=true` before deployment. During
+an incident rollback, roll back application code first; do not drop the
+`auth_user_id` link and never restore anonymous RLS policies.
+
+Deploy the application to Vercel:
 
 ```bash
 npx vercel
@@ -120,6 +142,10 @@ npx vercel
 Set environment variables in Vercel project settings:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+`DEMO_AUTH_PASSWORD` and `ALLOW_DEMO_AUTH_BOOTSTRAP=true` belong only in the
+controlled one-time bootstrap environment, not normal application runtime.
 
 ## License
 

@@ -6,6 +6,7 @@ export default defineConfig({
     "phase1-guardrails.spec.ts",
     "phase2-auth-contract.spec.ts",
     "bootstrap-demo-auth.spec.ts",
+    "e2e-auth-helper.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

@@ -7,18 +7,21 @@ test.describe("Authentication", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("shows login page with email form", async ({ page }) => {
+  test("shows login page with email and password fields", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator("h1")).toHaveText("LeaveHub");
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input[name="email"]')).toBeVisible();
+    await expect(page.locator('input[name="password"]')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toHaveText("Sign in");
   });
 
-  test("rejects unknown email", async ({ page }) => {
+  test("rejects invalid credentials without revealing account existence", async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[type="email"]', "unknown@gmail.com");
+    await page.fill('input[name="email"]', "unknown@gmail.com");
+    await page.fill('input[name="password"]', "definitely-not-the-demo-password");
     await page.click('button[type="submit"]');
-    await expect(page.locator("text=Employee not found")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
+    await expect(page).toHaveURL(/\/login/);
   });
 
   test("logs in as HR user", async ({ page }) => {
@@ -37,9 +40,11 @@ test.describe("Authentication", () => {
     await expect(page.locator("h1")).toContainText("Welcome");
   });
 
-  test("logs out successfully", async ({ page }) => {
+  test("Server Action logout invalidates protected navigation", async ({ page }) => {
     await login(page, USERS.admin.email);
     await logout(page);
+    await expect(page).toHaveURL(/\/login/);
+    await page.goto("/");
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -48,5 +53,20 @@ test.describe("Authentication", () => {
     await page.reload();
     await expect(page).toHaveURL("/");
     await expect(page.locator("h1")).toContainText("Welcome");
+  });
+
+  test("legacy mock cookie does not authenticate", async ({ context, page }) => {
+    await context.addCookies([
+      {
+        name: "leavehub_mock_user",
+        value: encodeURIComponent(JSON.stringify({ email: USERS.admin.email })),
+        url: "http://localhost:3000",
+      },
+    ]);
+
+    await page.goto("/");
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.locator("h1")).toHaveText("LeaveHub");
   });
 });
