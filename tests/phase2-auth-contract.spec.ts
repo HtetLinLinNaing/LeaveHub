@@ -1,8 +1,17 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import {
+  AuthApiError,
+  AuthRetryableFetchError,
+} from "@supabase/supabase-js";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveActor } from "../lib/auth/actor";
+import {
+  authenticatePassword,
+  loginFailureState,
+  type PasswordAuthenticationDependencies,
+} from "../lib/auth/password";
 import {
   canApproveLeave,
   canManageEmployees,
@@ -13,6 +22,7 @@ import {
 } from "../lib/auth/permissions";
 import { readSupabasePublicEnv } from "../lib/supabase/env";
 import { isPublicPath } from "../lib/supabase/proxy";
+import { loginSchema } from "../lib/validations";
 import { config } from "../proxy";
 
 const migration = readFileSync("supabase/migrations/009_supabase_password_auth.sql", "utf8");
@@ -57,7 +67,150 @@ function createActorDatabase({
   } as unknown as SupabaseClient;
 }
 
+function createPasswordDependencies({
+  signInError = null,
+  actor = { userId: "app-user-id" },
+  actorError,
+}: {
+  signInError?: unknown;
+  actor?: { userId: string } | null;
+  actorError?: Error;
+} = {}) {
+  let signedOut = false;
+
+  const dependencies: PasswordAuthenticationDependencies = {
+    signInWithPassword: async () => ({
+      user: signInError
+        ? null
+        : { id: "auth-user-id", email: "employee@example.com" },
+      error: signInError,
+    }),
+    resolveActor: async () => {
+      if (actorError) throw actorError;
+      return actor;
+    },
+    signOut: async () => {
+      signedOut = true;
+    },
+  };
+
+  return { dependencies, wasSignedOut: () => signedOut };
+}
+
 test.describe("Phase 2 authentication contracts", () => {
+  test("rejects malformed login email addresses", () => {
+    expect(
+      loginSchema.safeParse({ email: "not-an-email", password: "password" })
+        .success
+    ).toBe(false);
+  });
+
+  test("rejects an empty login password", () => {
+    expect(
+      loginSchema.safeParse({ email: "employee@example.com", password: "" })
+        .success
+    ).toBe(false);
+  });
+
+  test("rejects a login password over 128 characters", () => {
+    expect(
+      loginSchema.safeParse({
+        email: "employee@example.com",
+        password: "x".repeat(129),
+      }).success
+    ).toBe(false);
+  });
+
+  test("rejects extra login fields", () => {
+    expect(
+      loginSchema.safeParse({
+        email: "employee@example.com",
+        password: "password",
+        role: "admin",
+      }).success
+    ).toBe(false);
+  });
+
+  test("does not enumerate invalid password credentials", async () => {
+    const { dependencies, wasSignedOut } = createPasswordDependencies({
+      signInError: new AuthApiError(
+        "provider detail must stay private",
+        400,
+        "invalid_credentials"
+      ),
+    });
+
+    await expect(
+      authenticatePassword(
+        { email: "employee@example.com", password: "wrong" },
+        dependencies
+      )
+    ).resolves.toEqual({ error: "Invalid email or password." });
+    expect(wasSignedOut()).toBe(true);
+  });
+
+  test("signs out an authenticated identity without an active linked actor", async () => {
+    const { dependencies, wasSignedOut } = createPasswordDependencies({
+      actor: null,
+    });
+
+    await expect(
+      authenticatePassword(
+        { email: "employee@example.com", password: "password" },
+        dependencies
+      )
+    ).resolves.toEqual({
+      error: "Your account is not enabled for LeaveHub.",
+    });
+    expect(wasSignedOut()).toBe(true);
+  });
+
+  test("throws retryable Auth failures for operational handling", async () => {
+    const authError = new AuthRetryableFetchError(
+      "provider unavailable",
+      503
+    );
+    const { dependencies } = createPasswordDependencies({
+      signInError: authError,
+    });
+
+    await expect(
+      authenticatePassword(
+        { email: "employee@example.com", password: "password" },
+        dependencies
+      )
+    ).rejects.toBe(authError);
+  });
+
+  test("signs out before propagating actor lookup failures", async () => {
+    const databaseError = new Error("database connection detail");
+    const { dependencies, wasSignedOut } = createPasswordDependencies({
+      actorError: databaseError,
+    });
+
+    await expect(
+      authenticatePassword(
+        { email: "employee@example.com", password: "password" },
+        dependencies
+      )
+    ).rejects.toBe(databaseError);
+    expect(wasSignedOut()).toBe(true);
+  });
+
+  test("sanitizes and logs unexpected login failures", () => {
+    const operationalError = new Error("database connection detail");
+    const logged: Array<{ message: string; error: unknown }> = [];
+
+    expect(
+      loginFailureState(operationalError, (message, error) => {
+        logged.push({ message, error });
+      })
+    ).toEqual({ error: "Sign in is temporarily unavailable." });
+    expect(logged).toEqual([
+      { message: "Password sign-in failed", error: operationalError },
+    ]);
+  });
+
   test("resolves a linked active employee to the approved Actor shape", async () => {
     const db = createActorDatabase({
       user: {

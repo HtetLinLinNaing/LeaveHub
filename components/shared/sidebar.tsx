@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { clearMockSession } from "@/lib/auth";
+import { logout } from "@/lib/auth/actions";
 import type { Role } from "@/lib/types";
 import {
   LayoutDashboard,
@@ -36,17 +36,9 @@ const navItems: NavItem[] = [
 
 function SidebarContent({ role, email }: { role: Role; email: string }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { close } = useSidebar();
 
   const filteredItems = navItems.filter((item) => item.roles.includes(role));
-
-  function handleLogout() {
-    clearMockSession();
-    close();
-    router.push("/login");
-    router.refresh();
-  }
 
   return (
     <div className="flex h-full w-full flex-col bg-white">
@@ -80,13 +72,15 @@ function SidebarContent({ role, email }: { role: Role; email: string }) {
 
       <div className="border-t p-3">
         <div className="mb-2 px-3 text-xs text-gray-500">{email}</div>
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </form>
       </div>
     </div>
   );
