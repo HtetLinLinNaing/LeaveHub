@@ -20,16 +20,20 @@ function buildAuthIndexes(authUsers) {
       throw new Error("Invalid Auth user: missing ID.");
     }
 
-    const email = normalizeEmail(authUser.email);
-    if (byEmail.has(email)) {
-      throw new Error(`Duplicate Auth email: ${email}.`);
-    }
     if (byId.has(authUser.id)) {
       throw new Error(`Duplicate Auth ID: ${authUser.id}.`);
     }
 
+    const email =
+      authUser.email === null || authUser.email === undefined
+        ? null
+        : normalizeEmail(authUser.email);
+    if (email && byEmail.has(email)) {
+      throw new Error(`Duplicate Auth email: ${email}.`);
+    }
+
     const indexedUser = { id: authUser.id, email };
-    byEmail.set(email, indexedUser);
+    if (email) byEmail.set(email, indexedUser);
     byId.set(authUser.id, indexedUser);
   }
 

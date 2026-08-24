@@ -1,4 +1,5 @@
 import {
+  normalizeEmail,
   planDemoAuthChanges,
   summarizeDemoAuthPlan,
 } from "./bootstrap-demo-auth-core.mjs";
@@ -48,15 +49,18 @@ export function readBootstrapConfig(env) {
 
 async function loadPublicUsers(supabase) {
   const users = [];
+  let lastId = null;
 
-  for (let offset = 0; ; offset += PAGE_SIZE) {
+  for (;;) {
     let result;
     try {
-      result = await supabase
+      let query = supabase
         .from("users")
-        .select("id,email,auth_user_id")
+        .select("id,email,auth_user_id");
+      if (lastId) query = query.gt("id", lastId);
+      result = await query
         .order("id", { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1);
+        .limit(PAGE_SIZE);
     } catch {
       throw new BootstrapError("Failed to load public users.");
     }
@@ -66,7 +70,13 @@ async function loadPublicUsers(supabase) {
     }
 
     users.push(...result.data);
-    if (result.data.length < PAGE_SIZE) return users;
+    if (result.data.length === 0) return users;
+
+    const nextLastId = result.data.at(-1)?.id;
+    if (typeof nextLastId !== "string" || !nextLastId || nextLastId === lastId) {
+      throw new BootstrapError("Failed to page through public users safely.");
+    }
+    lastId = nextLastId;
   }
 }
 
@@ -166,17 +176,46 @@ async function linkPublicUser(supabase, operation) {
   }
 }
 
-async function run() {
-  const config = readBootstrapConfig(process.env);
-  const { createClient } = await import("@supabase/supabase-js");
-  const supabase = createClient(config.url, config.serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
+async function confirmPublicLink(supabase, operation) {
+  let result;
+  try {
+    result = await supabase
+      .from("users")
+      .select("id,email,auth_user_id")
+      .eq("id", operation.publicUserId)
+      .eq("auth_user_id", operation.authUserId);
+  } catch {
+    throw new BootstrapError(
+      `Failed to confirm exactly one public link for ${operation.email}.`
+    );
+  }
 
+  let confirmedEmail;
+  try {
+    confirmedEmail = normalizeEmail(result.data?.[0]?.email);
+  } catch {
+    confirmedEmail = null;
+  }
+
+  if (
+    result.error ||
+    !Array.isArray(result.data) ||
+    result.data.length !== 1 ||
+    result.data[0]?.id !== operation.publicUserId ||
+    result.data[0]?.auth_user_id !== operation.authUserId ||
+    confirmedEmail !== operation.email
+  ) {
+    throw new BootstrapError(
+      `Failed to confirm exactly one public link for ${operation.email}.`
+    );
+  }
+}
+
+export async function bootstrapDemoAuth({
+  supabase,
+  password,
+  log = console.log,
+}) {
   const publicUsers = await loadPublicUsers(supabase);
   if (publicUsers.length === 0) {
     throw new BootstrapError(
@@ -194,23 +233,40 @@ async function run() {
     );
   }
 
-  console.log(
+  const existingLinks = publicUsers
+    .filter(({ auth_user_id: authUserId }) => authUserId !== null)
+    .map(({ id, email, auth_user_id: authUserId }) => ({
+      publicUserId: id,
+      authUserId,
+      email: normalizeEmail(email),
+    }));
+
+  log(
     "Demo Auth bootstrap plan:",
     JSON.stringify(summarizeDemoAuthPlan(plan))
   );
 
+  for (const operation of existingLinks) {
+    await confirmPublicLink(supabase, operation);
+  }
+
   const createdLinks = [];
   for (const operation of plan.create) {
-    createdLinks.push(await createAuthUser(supabase, operation, config.password));
+    createdLinks.push(await createAuthUser(supabase, operation, password));
   }
   for (const operation of plan.updatePassword) {
-    await updateAuthPassword(supabase, operation, config.password);
+    await updateAuthPassword(supabase, operation, password);
   }
   for (const operation of [...plan.link, ...createdLinks]) {
     await linkPublicUser(supabase, operation);
   }
 
-  console.log(
+  const confirmedLinks = [...existingLinks, ...plan.link, ...createdLinks];
+  for (const operation of confirmedLinks) {
+    await confirmPublicLink(supabase, operation);
+  }
+
+  log(
     "Demo Auth bootstrap complete:",
     JSON.stringify({
       created: { count: createdLinks.length, emails: createdLinks.map(({ email }) => email) },
@@ -224,6 +280,23 @@ async function run() {
       },
     })
   );
+}
+
+async function run() {
+  const config = readBootstrapConfig(process.env);
+  const { createClient } = await import("@supabase/supabase-js");
+  const supabase = createClient(config.url, config.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  await bootstrapDemoAuth({
+    supabase,
+    password: config.password,
+  });
 }
 
 function reportFailure(error) {
