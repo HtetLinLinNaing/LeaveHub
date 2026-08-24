@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "auth:bootstrap-demo": "node --env-file=.env.local scripts/bootstrap-demo-auth.mjs",
     "lint": "eslint",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui"
