@@ -1,7 +1,6 @@
 import {
   AuthInvalidCredentialsError,
   isAuthApiError,
-  isAuthRetryableFetchError,
 } from "@supabase/supabase-js";
 import type { LoginInput } from "@/lib/validations";
 
@@ -26,12 +25,19 @@ export interface PasswordAuthenticationDependencies {
 
 type LoginErrorLogger = (message: string, error: unknown) => void;
 
+const REJECTED_CREDENTIAL_CODES = new Set([
+  "invalid_credentials",
+  "email_not_confirmed",
+  "user_banned",
+]);
+
 function isRejectedCredential(error: unknown) {
-  if (isAuthRetryableFetchError(error)) return false;
   if (error instanceof AuthInvalidCredentialsError) return true;
 
   return (
-    isAuthApiError(error) && error.status >= 400 && error.status < 500
+    isAuthApiError(error) &&
+    error.code !== undefined &&
+    REJECTED_CREDENTIAL_CODES.has(error.code)
   );
 }
 

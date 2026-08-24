@@ -182,6 +182,24 @@ test.describe("Phase 2 authentication contracts", () => {
     ).rejects.toBe(authError);
   });
 
+  test("throws rate-limit Auth responses for operational handling", async () => {
+    const authError = new AuthApiError(
+      "rate limit detail must stay private",
+      429,
+      "over_request_rate_limit"
+    );
+    const { dependencies } = createPasswordDependencies({
+      signInError: authError,
+    });
+
+    await expect(
+      authenticatePassword(
+        { email: "employee@example.com", password: "password" },
+        dependencies
+      )
+    ).rejects.toBe(authError);
+  });
+
   test("signs out before propagating actor lookup failures", async () => {
     const databaseError = new Error("database connection detail");
     const { dependencies, wasSignedOut } = createPasswordDependencies({
