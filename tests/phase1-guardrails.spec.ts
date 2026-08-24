@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveActor } from "../lib/auth/actor";
 import { canViewApprovals } from "../lib/auth/permissions";
@@ -110,5 +111,25 @@ test.describe("Phase 1 server entry-point guardrails", () => {
 
     expect(result).toEqual({ ok: false, error: "Failed to update request" });
     expect(result.error).not.toContain("service-role-secret");
+  });
+
+  test("action failure handling preserves Next.js redirect control flow", async () => {
+    const modulePath = "../lib/action-errors";
+    const { actionFailure } = await import(modulePath);
+    let redirectError: unknown;
+
+    try {
+      redirect("/login");
+    } catch (error) {
+      redirectError = error;
+    }
+
+    expect(redirectError).toBeDefined();
+    try {
+      actionFailure(redirectError, "Failed to authenticate request");
+      throw new Error("Expected redirect control flow to be rethrown");
+    } catch (error) {
+      expect(error).toBe(redirectError);
+    }
   });
 });

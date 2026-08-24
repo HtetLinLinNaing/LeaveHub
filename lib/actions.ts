@@ -1,16 +1,15 @@
 "use server";
 
-import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { updateTag } from "next/cache";
-import { getSessionFromRequest, getCurrentEmployee } from "@/lib/auth";
 import {
   canApproveLeave,
   canManageEmployees,
   canManageGrants,
   canProposeGrants,
 } from "@/lib/auth/permissions";
-import { createClient } from "@/lib/supabase/admin";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import {
   createLeaveRequestSchema,
   employeeSchema,
@@ -24,7 +23,7 @@ import {
 } from "@/lib/validations";
 import { getGrantDrivenAvailability } from "@/lib/grants";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
-import { actionFailure, ExpectedActionError } from "@/lib/action-errors";
+import { actionFailure } from "@/lib/action-errors";
 import type { DayDuration, Role } from "@/lib/types";
 
 // ----- Per-day duration helpers -----
@@ -47,18 +46,6 @@ function rollUpParent(days: { duration: DayDuration }[]) {
   return { total, durationType };
 }
 
-// ----- Helpers -----
-
-async function requireSession() {
-  const cookieStore = await cookies();
-  const session = getSessionFromRequest(cookieStore.toString());
-  if (!session) throw new ExpectedActionError("Not authenticated");
-  const supabase = await createClient();
-  const { user, employee } = await getCurrentEmployee(supabase, session.email);
-  if (!user) throw new ExpectedActionError("Not authenticated");
-  return { supabase, user, employee, role: user.role as Role };
-}
-
 // ----- Approve / reject a leave request -----
 
 export interface ApprovalResult {
@@ -71,11 +58,11 @@ export async function approveLeaveRequest(
   action: "approved" | "rejected"
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, user, employee } = await requireSession();
-    if (!canApproveLeave(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canApproveLeave(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
-    if (!employee) return { ok: false, error: "Approver record not found" };
+    if (!actor.employee) return { ok: false, error: "Approver record not found" };
 
     const parsed = approveLeaveRequestActionSchema.safeParse({ requestId, action });
     if (!parsed.success) {
@@ -87,24 +74,24 @@ export async function approveLeaveRequest(
     // Manager scope: only direct reports, and never another manager's self-request.
     // PostgREST nested joins silently return zero rows on this project, so
     // hydrate via separate queries in JS.
-    if (user.role === "manager") {
-      const { data: req, error: requestError } = await supabase
+    if (actor.role === "manager") {
+      const { data: req, error: requestError } = await db
         .from("leave_requests")
         .select("id, employee_id")
         .eq("id", validatedRequestId)
         .maybeSingle();
       if (requestError) throw requestError;
       if (!req) return { ok: false, error: "Not authorized for this request" };
-      const { data: emp, error: employeeError } = await supabase
+      const { data: emp, error: employeeError } = await db
         .from("employees")
         .select("manager_id, user_id")
         .eq("id", req.employee_id)
         .maybeSingle();
       if (employeeError) throw employeeError;
-      if (!emp || emp.manager_id !== employee.id) {
+      if (!emp || emp.manager_id !== actor.employee.id) {
         return { ok: false, error: "Not authorized for this request" };
       }
-      const { data: u, error: roleError } = await supabase
+      const { data: u, error: roleError } = await db
         .from("users")
         .select("role")
         .eq("id", emp.user_id)
@@ -116,11 +103,11 @@ export async function approveLeaveRequest(
       }
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("leave_requests")
       .update({
         status: validatedAction,
-        approved_by: employee.id,
+        approved_by: actor.employee.id,
         approved_at: new Date().toISOString(),
       })
       .eq("id", validatedRequestId)
@@ -136,7 +123,7 @@ export async function approveLeaveRequest(
     // check was bypassed (e.g. an old request without the check) and we
     // must not double-book. Reject and roll back the approval.
     if (validatedAction === "approved") {
-      const { data: conflicts, error: conflictsError } = await supabase
+      const { data: conflicts, error: conflictsError } = await db
         .from("leave_requests")
         .select("id, start_date, end_date")
         .eq("employee_id", updated.employee_id)
@@ -146,7 +133,7 @@ export async function approveLeaveRequest(
         .gte("end_date", updated.start_date);
       if (conflictsError) throw conflictsError;
       if (conflicts && conflicts.length > 0) {
-        await supabase
+        await db
           .from("leave_requests")
           .update({
             status: "pending",
@@ -165,7 +152,7 @@ export async function approveLeaveRequest(
     // If approved, decrement the requester's leave balance
     if (validatedAction === "approved") {
       const year = new Date(updated.start_date).getFullYear();
-      const { data: balance, error: balanceLookupError } = await supabase
+      const { data: balance, error: balanceLookupError } = await db
         .from("leave_balances")
         .select("id, used_days, remaining_days")
         .eq("employee_id", updated.employee_id)
@@ -175,7 +162,7 @@ export async function approveLeaveRequest(
       if (balanceLookupError) throw balanceLookupError;
 
       if (balance) {
-        const { error: balanceError } = await supabase
+        const { error: balanceError } = await db
           .from("leave_balances")
           .update({
             used_days: balance.used_days + updated.days,
@@ -208,8 +195,8 @@ export interface CreateEmployeeInput {
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<ApprovalResult> {
   try {
-    const { supabase, user } = await requireSession();
-    if (!canManageEmployees(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageEmployees(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
 
@@ -224,7 +211,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     const validatedInput = parsed.data;
     let managerId = validatedInput.manager_id;
     if (managerId === null) {
-      const { data: mgrs, error: managersError } = await supabase
+      const { data: mgrs, error: managersError } = await db
         .from("employees")
         .select("id")
         .eq("status", "active")
@@ -235,14 +222,14 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     }
 
     // Generate employee code from current count
-    const { count, error: countError } = await supabase
+    const { count, error: countError } = await db
       .from("employees")
       .select("*", { count: "exact", head: true });
     if (countError) throw countError;
     const code = `EMP${String((count ?? 0) + 1).padStart(3, "0")}`;
 
     // Create user
-    const { data: created, error: userError } = await supabase
+    const { data: created, error: userError } = await db
       .from("users")
       .insert({ email: validatedInput.email, role: validatedInput.role })
       .select("id")
@@ -250,7 +237,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     if (userError) throw userError;
 
     // Create employee
-    const { data: employee, error: empError } = await supabase
+    const { data: employee, error: empError } = await db
       .from("employees")
       .insert({
         user_id: created.id,
@@ -267,7 +254,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
     if (empError) throw empError;
 
     // Seed leave balances for current year
-    const { data: leaveTypes, error: leaveTypesError } = await supabase
+    const { data: leaveTypes, error: leaveTypesError } = await db
       .from("leave_types")
       .select("id, annual_days")
       .gt("annual_days", 0);
@@ -275,7 +262,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Approv
 
     if (leaveTypes && leaveTypes.length > 0) {
       const year = new Date().getFullYear();
-      const { error: balError } = await supabase.from("leave_balances").insert(
+      const { error: balError } = await db.from("leave_balances").insert(
         leaveTypes.map((lt) => ({
           employee_id: employee.id,
           leave_type_id: lt.id,
@@ -307,8 +294,8 @@ export async function updateEmployeeStatus(
   input: UpdateEmployeeStatusInput
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, user } = await requireSession();
-    if (!canManageEmployees(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageEmployees(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
 
@@ -320,7 +307,7 @@ export async function updateEmployeeStatus(
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("employees")
       .update({ status: parsed.data.status })
       .eq("id", parsed.data.employeeId)
@@ -354,8 +341,8 @@ export async function createLeaveRequest(
   input: CreateLeaveRequestInput
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, employee } = await requireSession();
-    if (!employee) return { ok: false, error: "Employee record not found" };
+    const { actor, db } = await requireRequestContext();
+    if (!actor.employee) return { ok: false, error: "Employee record not found" };
 
     const parsed = createLeaveRequestSchema.safeParse(input);
     if (!parsed.success) {
@@ -377,7 +364,7 @@ export async function createLeaveRequest(
     const earliest = dates[0];
     const latest = dates[dates.length - 1];
 
-    const { data: holidayRows, error: holidaysError } = await supabase
+    const { data: holidayRows, error: holidaysError } = await db
       .from("holidays")
       .select("date")
       .gte("date", earliest)
@@ -402,10 +389,10 @@ export async function createLeaveRequest(
     // Overlap check: reject if any pending or approved request for this
     // employee already covers any of the same dates. Range overlap:
     // existing.start <= new.end AND existing.end >= new.start.
-    const { data: conflicts, error: conflictsError } = await supabase
+    const { data: conflicts, error: conflictsError } = await db
       .from("leave_requests")
       .select("id, start_date, end_date, status")
-      .eq("employee_id", employee.id)
+      .eq("employee_id", actor.employee.id)
       .in("status", ["pending", "approved"])
       .lte("start_date", latest)
       .gte("end_date", earliest);
@@ -422,7 +409,7 @@ export async function createLeaveRequest(
 
     // Compassionate Leave balance check: derived available >= total.
     if (parsed.data.leave_type_id) {
-      const { data: ltForCheck, error: leaveTypeError } = await supabase
+      const { data: ltForCheck, error: leaveTypeError } = await db
         .from("leave_types")
         .select("id, name")
         .eq("id", parsed.data.leave_type_id)
@@ -432,8 +419,8 @@ export async function createLeaveRequest(
       if (ltForCheck && (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(ltForCheck.name)) {
         const year = new Date(parsed.data.start_date).getFullYear();
         const { available } = await getGrantDrivenAvailability(
-          supabase,
-          employee.id,
+          db,
+          actor.employee.id,
           year,
           ltForCheck.id
         );
@@ -448,10 +435,10 @@ export async function createLeaveRequest(
 
     // Parent row stays shape-compatible with existing approval / balance
     // / calendar code. Child rows carry the per-day breakdown.
-    const { data: created, error: insertError } = await supabase
+    const { data: created, error: insertError } = await db
       .from("leave_requests")
       .insert({
-        employee_id: employee.id,
+        employee_id: actor.employee.id,
         leave_type_id: parsed.data.leave_type_id,
         start_date: parsed.data.start_date,
         end_date: parsed.data.end_date,
@@ -472,7 +459,7 @@ export async function createLeaveRequest(
     if (insertError) throw insertError;
     if (!created) return { ok: false, error: "Failed to submit request" };
 
-    const { error: daysError } = await supabase.from("leave_request_days").insert(
+    const { error: daysError } = await db.from("leave_request_days").insert(
       dayRows.map((d) => ({
         leave_request_id: created.id,
         date: d.date,
@@ -515,8 +502,8 @@ export async function uploadMcCertificate(
   formData: FormData
 ): Promise<{ ok: true; path: string; name: string } | { ok: false; error: string }> {
   try {
-    const { supabase, employee } = await requireSession();
-    if (!employee) return { ok: false, error: "Employee record not found" };
+    const { actor, db } = await requireRequestContext();
+    if (!actor.employee) return { ok: false, error: "Employee record not found" };
 
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -540,12 +527,12 @@ export async function uploadMcCertificate(
     // Ensure the bucket exists. The migration creates the table metadata
     // but Storage buckets are separate; create on demand with private
     // visibility so only authenticated users can read.
-    await ensureBucket(supabase, MC_BUCKET);
+    await ensureBucket(db, MC_BUCKET);
 
     const ext = extFor(file);
-    const objectKey = `${employee.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const objectKey = `${actor.employee.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const buf = new Uint8Array(await file.arrayBuffer());
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await db.storage
       .from(MC_BUCKET)
       .upload(objectKey, buf, { contentType: mime, upsert: false });
     if (uploadError) throw uploadError;
@@ -561,16 +548,16 @@ export async function uploadMcCertificate(
 // round-trip; subsequent calls hit the Set.
 const _bucketCache = new Set<string>();
 async function ensureBucket(
-  supabase: Awaited<ReturnType<typeof requireSession>>["supabase"],
+  db: SupabaseClient,
   name: string
 ) {
   if (_bucketCache.has(name)) return;
-  const { data: existing, error: lookupError } = await supabase.storage.getBucket(name);
+  const { data: existing, error: lookupError } = await db.storage.getBucket(name);
   if (lookupError && !/not found/i.test(lookupError.message)) {
     throw lookupError;
   }
   if (!existing) {
-    const { error } = await supabase.storage.createBucket(name, {
+    const { error } = await db.storage.createBucket(name, {
       public: false,
       fileSizeLimit: MC_MAX_BYTES,
       allowedMimeTypes: Array.from(MC_ALLOWED_MIME),
@@ -588,8 +575,8 @@ async function ensureBucket(
 
 export async function cancelLeaveRequest(requestId: string): Promise<ApprovalResult> {
   try {
-    const { supabase, employee } = await requireSession();
-    if (!employee) return { ok: false, error: "Employee record not found" };
+    const { actor, db } = await requireRequestContext();
+    if (!actor.employee) return { ok: false, error: "Employee record not found" };
 
     const parsedId = resourceIdSchema.safeParse(requestId);
     if (!parsedId.success) {
@@ -597,11 +584,11 @@ export async function cancelLeaveRequest(requestId: string): Promise<ApprovalRes
     }
 
     // Only own + still pending
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("leave_requests")
       .update({ status: "cancelled" })
       .eq("id", parsedId.data)
-      .eq("employee_id", employee.id)
+      .eq("employee_id", actor.employee.id)
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
@@ -620,8 +607,8 @@ export async function cancelLeaveRequest(requestId: string): Promise<ApprovalRes
 
 export async function createHoliday(input: { name: string; date: string }): Promise<ApprovalResult> {
   try {
-    const { supabase, user } = await requireSession();
-    if (!canManageEmployees(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageEmployees(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
 
@@ -630,7 +617,7 @@ export async function createHoliday(input: { name: string; date: string }): Prom
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
-    const { error } = await supabase.from("holidays").insert(parsed.data);
+    const { error } = await db.from("holidays").insert(parsed.data);
     if (error) throw error;
     updateTag("holidays");
     revalidatePath("/policies");
@@ -644,15 +631,15 @@ export async function createHoliday(input: { name: string; date: string }): Prom
 
 export async function deleteHoliday(id: string): Promise<ApprovalResult> {
   try {
-    const { supabase, user } = await requireSession();
-    if (!canManageEmployees(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageEmployees(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
     const parsedId = resourceIdSchema.safeParse(id);
     if (!parsedId.success) {
       return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid input" };
     }
-    const { error } = await supabase.from("holidays").delete().eq("id", parsedId.data);
+    const { error } = await db.from("holidays").delete().eq("id", parsedId.data);
     if (error) throw error;
     updateTag("holidays");
     revalidatePath("/policies");
@@ -669,15 +656,15 @@ export async function updateLeaveTypeDays(
   annualDays: number
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, user } = await requireSession();
-    if (!canManageEmployees(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageEmployees(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
     const parsed = updateLeaveTypeDaysActionSchema.safeParse({ leaveTypeId: id, annualDays });
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await db
       .from("leave_types")
       .update({ annual_days: parsed.data.annualDays })
       .eq("id", parsed.data.leaveTypeId)
@@ -706,11 +693,11 @@ export async function createLeaveGrant(
   input: CreateLeaveGrantInput
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, user, employee } = await requireSession();
-    if (!canProposeGrants(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canProposeGrants(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
-    if (!employee) return { ok: false, error: "Proposer record not found" };
+    if (!actor.employee) return { ok: false, error: "Proposer record not found" };
 
     const parsed = leaveGrantSchema.safeParse(input);
     if (!parsed.success) {
@@ -720,7 +707,7 @@ export async function createLeaveGrant(
 
     // Verify target employee is active. Manager scope: must be a direct
     // report. Admin scope: any active employee.
-    const { data: target, error: targetError } = await supabase
+    const { data: target, error: targetError } = await db
       .from("employees")
       .select("id, status, manager_id")
       .eq("id", validatedInput.employee_id)
@@ -730,7 +717,7 @@ export async function createLeaveGrant(
     if (target.status !== "active") {
       return { ok: false, error: "Employee is not active" };
     }
-    if (user.role === "manager" && target.manager_id !== employee.id) {
+    if (actor.role === "manager" && target.manager_id !== actor.employee.id) {
       return {
         ok: false,
         error: "Can only grant to your active direct reports",
@@ -738,7 +725,7 @@ export async function createLeaveGrant(
     }
 
     // Resolve leave type id from name and confirm it's grant-driven.
-    const { data: lt, error: leaveTypeError } = await supabase
+    const { data: lt, error: leaveTypeError } = await db
       .from("leave_types")
       .select("id, name")
       .eq("name", validatedInput.leave_type_name)
@@ -749,13 +736,13 @@ export async function createLeaveGrant(
       return { ok: false, error: "This leave type is not grant-driven" };
     }
 
-    const { error: insertError } = await supabase.from("leave_grants").insert({
+    const { error: insertError } = await db.from("leave_grants").insert({
       employee_id: validatedInput.employee_id,
       leave_type_id: lt.id,
       days: validatedInput.days,
       reason: validatedInput.reason,
       status: "pending",
-      created_by: employee.id,
+      created_by: actor.employee.id,
     });
     if (insertError) throw insertError;
 
@@ -774,11 +761,11 @@ export async function approveLeaveGrant(
   rejectionReason?: string
 ): Promise<ApprovalResult> {
   try {
-    const { supabase, user, employee } = await requireSession();
-    if (!canManageGrants(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canManageGrants(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
-    if (!employee) return { ok: false, error: "Admin record not found" };
+    if (!actor.employee) return { ok: false, error: "Admin record not found" };
 
     const parsed = approveLeaveGrantActionSchema.safeParse({
       grantId,
@@ -792,10 +779,10 @@ export async function approveLeaveGrant(
     const now = new Date().toISOString();
     const update =
       parsed.data.decision === "approved"
-        ? { status: "approved", approved_by: employee.id, approved_at: now, rejected_by: null, rejected_at: null, rejection_reason: null }
-        : { status: "rejected", rejected_by: employee.id, rejected_at: now, rejection_reason: parsed.data.rejectionReason ?? null };
+        ? { status: "approved", approved_by: actor.employee.id, approved_at: now, rejected_by: null, rejected_at: null, rejection_reason: null }
+        : { status: "rejected", rejected_by: actor.employee.id, rejected_at: now, rejection_reason: parsed.data.rejectionReason ?? null };
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("leave_grants")
       .update(update)
       .eq("id", parsed.data.grantId)
@@ -818,11 +805,11 @@ export async function approveLeaveGrant(
 
 export async function cancelPendingGrant(grantId: string): Promise<ApprovalResult> {
   try {
-    const { supabase, user, employee } = await requireSession();
-    if (!canProposeGrants(user.role as Role)) {
+    const { actor, db } = await requireRequestContext();
+    if (!canProposeGrants(actor.role)) {
       return { ok: false, error: "Not authorized" };
     }
-    if (!employee) return { ok: false, error: "Proposer record not found" };
+    if (!actor.employee) return { ok: false, error: "Proposer record not found" };
 
     const parsedId = resourceIdSchema.safeParse(grantId);
     if (!parsedId.success) {
@@ -830,11 +817,11 @@ export async function cancelPendingGrant(grantId: string): Promise<ApprovalResul
     }
 
     // Only the original creator can cancel; admin cannot cancel through this path.
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("leave_grants")
-      .update({ status: "rejected", rejected_by: employee.id, rejected_at: new Date().toISOString() })
+      .update({ status: "rejected", rejected_by: actor.employee.id, rejected_at: new Date().toISOString() })
       .eq("id", parsedId.data)
-      .eq("created_by", employee.id)
+      .eq("created_by", actor.employee.id)
       .eq("status", "pending")
       .select("id")
       .maybeSingle();

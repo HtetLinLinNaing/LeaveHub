@@ -40,6 +40,9 @@ const protectedServerComponents = [
 const protectedPages = protectedServerComponents.filter(
   (path) => !path.endsWith("layout.tsx")
 );
+const legacyAuthImport = ['from "@/lib', '/auth"'].join("");
+const legacyAdminImport = ['from "@/lib/supabase', '/admin"'].join("");
+const legacySessionHelper = ["require", "Session"].join("");
 
 type ActorQueryRow = Record<string, unknown> | null;
 
@@ -472,10 +475,10 @@ test.describe("Phase 2 authentication contracts", () => {
         'from "next/headers"'
       );
       expect(source, `${path} must not use legacy mock-session helpers`).not.toContain(
-        'from "@/lib/auth"'
+        legacyAuthImport
       );
       expect(source, `${path} must not create an admin client directly`).not.toContain(
-        'from "@/lib/supabase/admin"'
+        legacyAdminImport
       );
     }
 
@@ -494,5 +497,22 @@ test.describe("Phase 2 authentication contracts", () => {
         "await requireRequestContext()"
       );
     }
+  });
+
+  test("authenticates every Server Action through the verified request context", () => {
+    const source = readFileSync("lib/actions.ts", "utf8");
+
+    expect(source).toContain(
+      'import { requireRequestContext } from "@/lib/dal/request-context"'
+    );
+    expect(source).toContain(
+      'from "@/lib/auth/permissions"'
+    );
+    expect(source).not.toContain('from "next/headers"');
+    expect(source).not.toContain(legacyAuthImport);
+    expect(source).not.toContain(legacyAdminImport);
+    expect(source).not.toContain(legacySessionHelper);
+
+    expect(source.match(/await requireRequestContext\(\)/g)).toHaveLength(12);
   });
 });
