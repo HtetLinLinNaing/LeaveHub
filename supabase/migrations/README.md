@@ -8,7 +8,7 @@ bootstrap at production.
 | --- | --- |
 | `001_initial_schema.sql` | Initial schema and prototype policies |
 | `002_seed_data.sql` | Demo data |
-| `003_add_auth_fk.sql` | Initial `public.users.id` to `auth.users.id` identity constraint |
+| `003_add_auth_fk.sql` | Initial `NOT VALID` `public.users.id` to `auth.users.id` identity constraint |
 | `004_strict_rls.sql` | Remove prototype anonymous policies and add role policies |
 | `005_fix_rls_recursion.sql` | Add role helper functions that avoid recursive RLS |
 | `006_fix_employees_recursion.sql` | Add employee helper functions that avoid recursive RLS |
@@ -20,7 +20,24 @@ Server-side privileged access is centralized in `lib/dal/admin-client.ts`. The
 service-role key must remain server-only and must never be exposed through a
 `NEXT_PUBLIC_` variable, browser bundle, RSC payload, or response.
 
-## Phase 2 preflight and deployment order
+## Fresh local/disposable project
+
+For a normal fresh setup, use an approved local/disposable project and apply
+`001` through `009` in filename order. Migration `002` creates the demo rows
+before their Supabase Auth identities exist. Migration `003` therefore adds the
+legacy direct-ID foreign key as `NOT VALID`: PostgreSQL does not reject those
+preexisting seed rows, while it still checks any new rows created before `009`.
+
+Migration `009` backfills `auth_user_id = public.users.id` only where that same
+ID already exists in `auth.users`, then drops the legacy direct-ID constraint.
+On a fresh chain without Auth users, the seeded rows intentionally remain
+`auth_user_id = NULL`. Set the one-time bootstrap variables, run
+`npm run auth:bootstrap-demo`, review counts only, and immediately set
+`ALLOW_DEMO_AUTH_BOOTSTRAP=false` or remove it. The bootstrap creates or finds
+the Auth identities and links every demo public user. Confirm `unlinked_users`
+is zero with the count query below before starting or deploying the app.
+
+## Existing project upgrade and deployment order
 
 Migration `009` is an expand-compatible migration: it adds
 `public.users.auth_user_id`, backfills the existing identity correspondence,
@@ -28,7 +45,7 @@ updates authorization helpers, and removes the obsolete direct ID constraint.
 The previous application can continue to read users by email through the
 server-only client while the new application uses the identity link.
 
-Follow this order exactly:
+For an existing project, follow this order exactly:
 
 1. Back up the database, including the `public` schema and Supabase Auth users,
    and verify that the backup is restorable.
@@ -56,8 +73,9 @@ Follow this order exactly:
    Cleanup is not a security control: the new application ignores the cookie and
    it grants no access.
 
-For a preflight correspondence check, this query must return zero rows before
-`009` is applied:
+For an existing-project upgrade, this preflight correspondence query must return
+zero rows before `009` is applied. That requirement ensures every existing
+public user backfills during the migration:
 
 ```sql
 select u.id, u.email

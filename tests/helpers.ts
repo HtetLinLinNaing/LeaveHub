@@ -29,6 +29,10 @@ export async function login(page: Page, email: string) {
 }
 
 export async function logout(page: Page) {
+  const openNavigation = page.getByRole("button", { name: "Open navigation" });
+  if (await openNavigation.isVisible()) {
+    await openNavigation.click();
+  }
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.waitForURL("/login");
 }

@@ -3,9 +3,11 @@ BEGIN;
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS auth_user_id UUID;
 
-UPDATE public.users
-SET auth_user_id = id
-WHERE auth_user_id IS NULL;
+UPDATE public.users AS app_user
+SET auth_user_id = app_user.id
+FROM auth.users AS auth_user
+WHERE app_user.auth_user_id IS NULL
+  AND auth_user.id = app_user.id;
 
 ALTER TABLE public.users
   ADD CONSTRAINT users_auth_user_id_key UNIQUE (auth_user_id);

@@ -26,6 +26,7 @@ import { loginSchema } from "../lib/validations";
 import { config } from "../proxy";
 
 const migration = readFileSync("supabase/migrations/009_supabase_password_auth.sql", "utf8");
+const legacyAuthMigration = readFileSync("supabase/migrations/003_add_auth_fk.sql", "utf8");
 
 const protectedServerComponents = [
   "app/(dashboard)/layout.tsx",
@@ -386,9 +387,18 @@ test.describe("Phase 2 authentication contracts", () => {
     ]);
   });
 
-  test("maps Auth identities without changing application IDs", () => {
+  test("keeps seeded public users from blocking a fresh migration chain", () => {
+    expect(legacyAuthMigration).toMatch(
+      /FOREIGN KEY \(id\) REFERENCES auth\.users\(id\) ON DELETE CASCADE\s+NOT VALID;/
+    );
+  });
+
+  test("maps only existing Auth identities without changing application IDs", () => {
     expect(migration).toContain("ADD COLUMN IF NOT EXISTS auth_user_id UUID");
-    expect(migration).toContain("SET auth_user_id = id");
+    expect(migration).toContain("UPDATE public.users AS app_user");
+    expect(migration).toContain("SET auth_user_id = app_user.id");
+    expect(migration).toContain("FROM auth.users AS auth_user");
+    expect(migration).toContain("auth_user.id = app_user.id");
     expect(migration).toContain("REFERENCES auth.users(id) ON DELETE SET NULL");
     expect(migration).toContain("DROP CONSTRAINT IF EXISTS users_id_fkey");
   });

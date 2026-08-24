@@ -48,11 +48,22 @@ test.describe("E2E auth helper", () => {
     ]);
   });
 
-  test("submits the Server Action logout form and waits for login", async () => {
+  test("opens visible mobile navigation before submitting logout", async () => {
     const calls: string[] = [];
     const page = {
       getByRole: (role: string, options: { name: string }) => {
         calls.push(`getByRole:${role}:${options.name}`);
+
+        if (options.name === "Open navigation") {
+          return {
+            isVisible: async () => {
+              calls.push("isVisible:open-navigation:true");
+              return true;
+            },
+            click: async () => calls.push("click:open-navigation"),
+          };
+        }
+
         return {
           click: async () => calls.push("click:sign-out"),
         };
@@ -63,6 +74,43 @@ test.describe("E2E auth helper", () => {
     await authHelpers.logout(page);
 
     expect(calls).toEqual([
+      "getByRole:button:Open navigation",
+      "isVisible:open-navigation:true",
+      "click:open-navigation",
+      "getByRole:button:Sign out",
+      "click:sign-out",
+      "waitForURL:/login",
+    ]);
+  });
+
+  test("leaves hidden desktop navigation closed before submitting logout", async () => {
+    const calls: string[] = [];
+    const page = {
+      getByRole: (role: string, options: { name: string }) => {
+        calls.push(`getByRole:${role}:${options.name}`);
+
+        if (options.name === "Open navigation") {
+          return {
+            isVisible: async () => {
+              calls.push("isVisible:open-navigation:false");
+              return false;
+            },
+            click: async () => calls.push("click:open-navigation"),
+          };
+        }
+
+        return {
+          click: async () => calls.push("click:sign-out"),
+        };
+      },
+      waitForURL: async (url: string) => calls.push(`waitForURL:${url}`),
+    } as unknown as Page;
+
+    await authHelpers.logout(page);
+
+    expect(calls).toEqual([
+      "getByRole:button:Open navigation",
+      "isVisible:open-navigation:false",
       "getByRole:button:Sign out",
       "click:sign-out",
       "waitForURL:/login",

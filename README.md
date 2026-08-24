@@ -46,10 +46,15 @@ ALLOW_DEMO_AUTH_BOOTSTRAP=false
 DEMO_AUTH_PASSWORD=replace-with-at-least-12-characters
 ```
 
-3. Apply all migrations from `001` through `009` in filename order. Read the
+3. For a fresh project, apply all migrations from `001` through `009` in
+   filename order. Migration `003` adds its legacy identity constraint as
+   `NOT VALID`, so the seed rows from `002` do not require Auth identities yet.
+   Migration `009` links only IDs already present in `auth.users`; unmatched
+   seeded users remain safely unlinked with `auth_user_id = NULL` until the
+   explicit bootstrap in the next step. Read the
    [migration deployment guide](supabase/migrations/README.md) before applying
-   `009`; migration and bootstrap work must target an approved local/disposable
-   project.
+   migrations; migration and bootstrap work must target an approved
+   local/disposable project.
 
 4. Bootstrap the demo Auth identities once. Set
    `ALLOW_DEMO_AUTH_BOOTSTRAP=true`, run the command, review its counts, then
@@ -79,7 +84,7 @@ Run in order via SQL Editor:
 |------|---------|
 | `001_initial_schema.sql` | Tables, indexes, functions, dev RLS policies |
 | `002_seed_data.sql` | Sample users, employees, leave balances, holidays |
-| `003_add_auth_fk.sql` | Initial Auth identity constraint |
+| `003_add_auth_fk.sql` | Initial `NOT VALID` Auth identity constraint for fresh-chain compatibility |
 | `004_strict_rls.sql` | Strict role-based RLS policies |
 | `005_fix_rls_recursion.sql` | Non-recursive role helpers |
 | `006_fix_employees_recursion.sql` | Non-recursive employee helpers |

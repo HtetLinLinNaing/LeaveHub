@@ -24,6 +24,15 @@ test.describe("Authentication", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  test("rejects a known email with the same generic invalid-credential message", async ({ page }) => {
+    await page.goto("/login");
+    await page.fill('input[name="email"]', USERS.admin.email);
+    await page.fill('input[name="password"]', "definitely-not-the-demo-password");
+    await page.click('button[type="submit"]');
+    await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
   test("logs in as HR user", async ({ page }) => {
     await login(page, USERS.admin.email);
     await expect(page.locator("h1")).toContainText("Welcome");
