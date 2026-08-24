@@ -27,6 +27,20 @@ import { config } from "../proxy";
 
 const migration = readFileSync("supabase/migrations/009_supabase_password_auth.sql", "utf8");
 
+const protectedServerComponents = [
+  "app/(dashboard)/layout.tsx",
+  "app/(dashboard)/page.tsx",
+  "app/(dashboard)/leave/page.tsx",
+  "app/(dashboard)/approvals/page.tsx",
+  "app/(dashboard)/employees/page.tsx",
+  "app/(dashboard)/calendar/page.tsx",
+  "app/(dashboard)/policies/page.tsx",
+] as const;
+
+const protectedPages = protectedServerComponents.filter(
+  (path) => !path.endsWith("layout.tsx")
+);
+
 type ActorQueryRow = Record<string, unknown> | null;
 
 function createActorDatabase({
@@ -448,5 +462,37 @@ test.describe("Phase 2 authentication contracts", () => {
         url: "/leave",
       })
     ).toBe(true);
+  });
+
+  test("keeps protected Server Components behind the verified request context", () => {
+    for (const path of protectedServerComponents) {
+      const source = readFileSync(path, "utf8");
+
+      expect(source, `${path} must not read request cookies directly`).not.toContain(
+        'from "next/headers"'
+      );
+      expect(source, `${path} must not use legacy mock-session helpers`).not.toContain(
+        'from "@/lib/auth"'
+      );
+      expect(source, `${path} must not create an admin client directly`).not.toContain(
+        'from "@/lib/supabase/admin"'
+      );
+    }
+
+    const layoutSource = readFileSync(protectedServerComponents[0], "utf8");
+    expect(layoutSource).toContain(
+      'import { requireActor } from "@/lib/auth/session"'
+    );
+    expect(layoutSource).toContain("const actor = await requireActor()");
+
+    for (const path of protectedPages) {
+      const source = readFileSync(path, "utf8");
+      expect(source, `${path} must import the verified request context`).toContain(
+        'import { requireRequestContext } from "@/lib/dal/request-context"'
+      );
+      expect(source, `${path} must independently verify its request`).toContain(
+        "await requireRequestContext()"
+      );
+    }
   });
 });

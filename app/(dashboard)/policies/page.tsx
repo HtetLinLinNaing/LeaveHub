@@ -1,9 +1,12 @@
 import { getCachedLeaveTypes, getCachedHolidays } from "@/lib/cache";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { LeaveTypeList } from "@/components/features/policies/leave-type-list";
 import { HolidayList } from "@/components/features/policies/holiday-list";
 import { HolidayDialog } from "@/components/features/policies/holiday-dialog";
 
 export default async function PoliciesPage() {
+  await requireRequestContext();
+
   const [leaveTypes, holidays] = await Promise.all([
     getCachedLeaveTypes(),
     getCachedHolidays(),
