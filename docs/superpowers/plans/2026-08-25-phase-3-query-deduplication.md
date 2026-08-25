@@ -300,13 +300,14 @@ git commit -m "perf(grants): batch overview queries"
 ### Task 2: Deduplicate and parallelize approvals reads
 
 **Files:**
+- Create: `lib/approvals-read-model.ts`
 - Create: `lib/dal/approvals.ts`
 - Modify: `app/(dashboard)/approvals/page.tsx:1-266`
 - Modify: `tests/phase3-query-dedup.spec.ts`
 
 **Interfaces:**
 - Consumes: `Actor`, `SupabaseClient`, `canViewApprovals`, `GRANT_DRIVEN_LEAVE_TYPES`, and the existing component prop shapes.
-- Produces: `ApprovalsPageData`, `ApprovalsReader`, `composeApprovalsPageData(actor, reader): Promise<ApprovalsPageData | null>`, and `loadApprovalsPageData(actor, db): Promise<ApprovalsPageData | null>`.
+- Produces: pure `ApprovalsPageData`, `ApprovalsReader`, and `composeApprovalsPageData(actor, reader): Promise<ApprovalsPageData | null>` from `lib/approvals-read-model.ts`; server-only `loadApprovalsPageData(actor, db): Promise<ApprovalsPageData | null>` from `lib/dal/approvals.ts`.
 
 - [ ] **Step 1: Write failing authorization and reuse tests**
 
@@ -330,7 +331,7 @@ import {
   composeApprovalsPageData,
   type ApprovalsReader,
   type ManagerScope,
-} from "../lib/dal/approvals";
+} from "../lib/approvals-read-model";
 
 const employeeActor: Actor = {
   authUserId: "auth-employee",
@@ -468,16 +469,14 @@ Run:
 npx playwright test --config=playwright.unit.config.ts tests/phase3-query-dedup.spec.ts -g "approvals|manager scope|employee before"
 ```
 
-Expected: FAIL because `lib/dal/approvals.ts` and its interfaces do not exist.
+Expected: FAIL because `lib/approvals-read-model.ts` and its interfaces do not
+exist.
 
 - [ ] **Step 3: Create the server-only approvals contract and composer**
 
-Start `lib/dal/approvals.ts` with:
+Create pure `lib/approvals-read-model.ts` with:
 
 ```ts
-import "server-only";
-
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { canViewApprovals } from "@/lib/auth/permissions";
 import type { Actor } from "@/lib/auth/session";
 
@@ -590,9 +589,18 @@ export async function composeApprovalsPageData(
 
 Do not use `redirect()` inside the DAL. Returning `null` gives the page a framework-native redirect decision while guaranteeing zero reader calls for unauthorized actors.
 
+Do not add `server-only` to this pure composition module. It holds no database
+client, credentials, or privileged data access, and the Playwright contract
+suite imports it directly. The production Supabase adapter created in the next
+step remains server-only.
+
 - [ ] **Step 4: Implement the Supabase reader**
 
-Add `createApprovalsReader(db: SupabaseClient): ApprovalsReader`. Move the existing page queries and transformations into its five methods, preserving component data shapes. Required changes while moving:
+Create `lib/dal/approvals.ts` beginning with `import "server-only"`, import the
+pure interfaces/composer, and add
+`createApprovalsReader(db: SupabaseClient): ApprovalsReader`. Move the existing
+page queries and transformations into its five methods, preserving component
+data shapes. Required changes while moving:
 
 - `loadManagerScope` selects `id,user_id,first_name,last_name,employee_code,status` once, loads those users' roles once, derives non-manager `scopedEmployeeIds`, and derives active `dialogEmployees` from the same employee rows.
 - `loadPendingRequests` applies `.in("employee_id", scopedEmployeeIds)` whenever the argument is an array; `null` is the admin-only organization scope. It retains batched employee/type hydration and the following user hydration.
@@ -644,7 +652,7 @@ Expected: all commands exit 0. Confirm the manager test observes one scope load 
 - [ ] **Step 7: Commit Task 2**
 
 ```bash
-git add lib/dal/approvals.ts 'app/(dashboard)/approvals/page.tsx' tests/phase3-query-dedup.spec.ts
+git add lib/approvals-read-model.ts lib/dal/approvals.ts 'app/(dashboard)/approvals/page.tsx' tests/phase3-query-dedup.spec.ts
 git commit -m "perf(approvals): deduplicate scoped reads"
 ```
 
