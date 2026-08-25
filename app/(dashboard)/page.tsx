@@ -93,6 +93,7 @@ export default async function DashboardPage() {
     { count: pendingCount },
     { data: recentRequests },
     holidays,
+    grantDrivenOverview,
   ] = await Promise.all([
     db
       .from("leave_balances")
@@ -111,11 +112,10 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
     getCachedYearHolidays(year),
+    actor.employee
+      ? getGrantDrivenOverview(db, actor.employee.id, year)
+      : Promise.resolve([]),
   ]);
-
-  const grantDrivenOverview = actor.employee
-    ? await getGrantDrivenOverview(db, actor.employee.id, year)
-    : [];
 
   // Compassionate Leave is rendered separately with derived values. Drop
   // any stale leave_balances row for it so the old card doesn't appear.
