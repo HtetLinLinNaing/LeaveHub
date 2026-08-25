@@ -1,43 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { setMockSession } from "@/lib/auth";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { login } from "@/lib/auth/actions";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/mock-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!res.ok) {
-        setError("Employee not found. Contact HR to get access.");
-        return;
-      }
-
-      const { user } = await res.json();
-      setMockSession({ email: user.email });
-      router.push("/");
-      router.refresh();
-    } catch {
-      setError("Login failed. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [state, formAction, pending] = useActionState(login, {});
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -47,33 +15,47 @@ export default function LoginPage() {
           Sign in with your employee email
         </p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form action={formAction} className="space-y-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium">
               Email
             </label>
             <input
               id="email"
+              name="email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               placeholder="you@company.com"
               required
               className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600">{error}</p>
+          <div>
+            <label htmlFor="password" className="mb-1 block text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {state.error && (
+            <p role="alert" className="text-sm text-red-600">{state.error}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
+          <Button type="submit" className="w-full" disabled={pending}>
+            {pending ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 
         <p className="mt-4 text-center text-xs text-gray-400">
-          Mock auth — Google OAuth coming soon
+          Demo accounts use credentials provisioned by the administrator.
         </p>
       </div>
     </div>

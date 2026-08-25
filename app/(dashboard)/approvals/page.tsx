@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { canViewApprovals, getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/admin";
+import { canViewApprovals } from "@/lib/auth/permissions";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import { ApprovalList } from "@/components/features/approvals/approval-list";
 import { GrantProposeDialog } from "@/components/features/grants/grant-propose-dialog";
@@ -9,27 +8,21 @@ import { GrantApprovalList } from "@/components/features/grants/grant-approval-l
 import { MyGrantsList } from "@/components/features/grants/my-grants-list";
 
 export default async function ApprovalsPage() {
-  const cookieStore = await cookies();
-  const session = getSessionFromRequest(cookieStore.toString());
-  const supabase = await createClient();
-  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
-  const currentEmployeeId = employee?.id ?? null;
+  const { actor, db } = await requireRequestContext();
+  const currentEmployeeId = actor.employee?.id ?? null;
 
-  if (!user) {
-    redirect("/login");
-  }
-  if (!canViewApprovals(user.role)) {
+  if (!canViewApprovals(actor.role)) {
     redirect("/");
   }
-  if (user.role === "manager" && !currentEmployeeId) {
+  if (actor.role === "manager" && !currentEmployeeId) {
     redirect("/");
   }
 
   // Scope manager data before loading leave requests. This keeps requests
   // outside the manager's authorization boundary out of process memory.
   let scopedEmployeeIds: string[] | null = null;
-  if (user.role === "manager" && currentEmployeeId) {
-    const { data: directReports, error: reportsError } = await supabase
+  if (actor.role === "manager" && currentEmployeeId) {
+    const { data: directReports, error: reportsError } = await db
       .from("employees")
       .select("id, user_id")
       .eq("manager_id", currentEmployeeId);
@@ -37,7 +30,7 @@ export default async function ApprovalsPage() {
 
     const reportUserIds = (directReports ?? []).map((report) => report.user_id);
     const { data: reportUsers, error: usersError } = reportUserIds.length
-      ? await supabase.from("users").select("id, role").in("id", reportUserIds)
+      ? await db.from("users").select("id, role").in("id", reportUserIds)
       : { data: [] as { id: string; role: string }[], error: null };
     if (usersError) throw usersError;
 
@@ -48,7 +41,7 @@ export default async function ApprovalsPage() {
   }
 
   // ---- Existing leave-request approvals (unchanged data shape) ----
-  const requestQuery = supabase
+  const requestQuery = db
       .from("leave_requests")
       .select("id, employee_id, leave_type_id, start_date, end_date, days, duration_type, reason, status, created_at")
       .eq("status", "pending")
@@ -65,18 +58,18 @@ export default async function ApprovalsPage() {
     const employeeIds = Array.from(new Set(requestRows.map((r) => r.employee_id)));
     const leaveTypeIds = Array.from(new Set(requestRows.map((r) => r.leave_type_id)));
     const [{ data: employees }, { data: leaveTypes }] = await Promise.all([
-      supabase
+      db
         .from("employees")
         .select("id, first_name, last_name, employee_code, department, manager_id, user_id")
         .in("id", employeeIds),
-      supabase
+      db
         .from("leave_types")
         .select("id, name")
         .in("id", leaveTypeIds),
     ]);
     const userIds = Array.from(new Set((employees ?? []).map((e) => e.user_id)));
     const { data: users } = userIds.length
-      ? await supabase.from("users").select("id, role").in("id", userIds)
+      ? await db.from("users").select("id, role").in("id", userIds)
       : { data: [] as { id: string; role: string }[] };
 
     const employeeMap = new Map((employees ?? []).map((e) => [e.id, e]));
@@ -104,7 +97,7 @@ export default async function ApprovalsPage() {
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    if (user?.role === "manager" && currentEmployeeId) {
+    if (actor.role === "manager" && currentEmployeeId) {
       mapped = mapped.filter(
         (r) =>
           r.employees.manager_id === currentEmployeeId &&
@@ -122,8 +115,8 @@ export default async function ApprovalsPage() {
   let myGrants: Parameters<typeof MyGrantsList>[0]["grants"] = [];
   let directReportsForDialog: { id: string; first_name: string; last_name: string; employee_code: string }[] = [];
 
-  if (user?.role === "admin") {
-    const { data: allTypes } = await supabase
+  if (actor.role === "admin") {
+    const { data: allTypes } = await db
       .from("leave_types")
       .select("id, name")
       .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
@@ -133,7 +126,7 @@ export default async function ApprovalsPage() {
     const typeIds = matchedTypes.map((t) => t.id);
     const typeMap = new Map(matchedTypes.map((t) => [t.id, t.name]));
 
-    const { data: raw } = await supabase
+    const { data: raw } = await db
       .from("leave_grants")
       .select("id, employee_id, leave_type_id, days, reason, created_at, created_by, status")
       .eq("status", "pending")
@@ -142,7 +135,7 @@ export default async function ApprovalsPage() {
     const rows = raw ?? [];
     if (rows.length > 0) {
       const empIds = Array.from(new Set([...rows.map((r) => r.employee_id), ...rows.map((r) => r.created_by)]));
-      const { data: emps } = await supabase
+      const { data: emps } = await db
         .from("employees")
         .select("id, first_name, last_name, employee_code, department")
         .in("id", empIds);
@@ -172,9 +165,9 @@ export default async function ApprovalsPage() {
         })
         .filter((g): g is NonNullable<typeof g> => g !== null);
     }
-  } else if (user?.role === "manager" && currentEmployeeId) {
+  } else if (actor.role === "manager" && currentEmployeeId) {
     // Own grants (any status), newest first.
-    const { data: allTypes } = await supabase
+    const { data: allTypes } = await db
       .from("leave_types")
       .select("id, name")
       .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
@@ -183,7 +176,7 @@ export default async function ApprovalsPage() {
     );
     const typeMap = new Map(matchedTypes.map((t) => [t.id, t.name]));
 
-    const { data: raw } = await supabase
+    const { data: raw } = await db
       .from("leave_grants")
       .select("id, employee_id, leave_type_id, days, reason, status, created_at, approved_at, rejected_at")
       .eq("created_by", currentEmployeeId)
@@ -192,7 +185,7 @@ export default async function ApprovalsPage() {
     const rows = raw ?? [];
     if (rows.length > 0) {
       const empIds = Array.from(new Set(rows.map((r) => r.employee_id)));
-      const { data: emps } = await supabase
+      const { data: emps } = await db
         .from("employees")
         .select("id, first_name, last_name, employee_code")
         .in("id", empIds);
@@ -224,15 +217,15 @@ export default async function ApprovalsPage() {
 
   // Employees for the propose dialog: admins get all active employees
   // (escape hatch), managers get their own direct reports.
-  if (user?.role === "admin") {
-    const { data: all } = await supabase
+  if (actor.role === "admin") {
+    const { data: all } = await db
       .from("employees")
       .select("id, first_name, last_name, employee_code")
       .eq("status", "active")
       .order("first_name");
     directReportsForDialog = all ?? [];
-  } else if (user?.role === "manager" && currentEmployeeId) {
-    const { data: drs } = await supabase
+  } else if (actor.role === "manager" && currentEmployeeId) {
+    const { data: drs } = await db
       .from("employees")
       .select("id, first_name, last_name, employee_code")
       .eq("manager_id", currentEmployeeId)
@@ -245,21 +238,21 @@ export default async function ApprovalsPage() {
     <div>
       <h1 className="mb-6 text-2xl font-bold">Pending Approvals</h1>
 
-      {(user?.role === "manager" || user?.role === "admin") && (
+      {(actor.role === "manager" || actor.role === "admin") && (
         <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">Leave Grants</h2>
           <GrantProposeDialog employees={directReportsForDialog} />
         </div>
       )}
 
-      {user?.role === "admin" && (
+      {actor.role === "admin" && (
         <section className="mb-8">
           <h3 className="mb-2 text-sm font-medium text-gray-500">Pending leave grants</h3>
           <GrantApprovalList grants={pendingGrants} />
         </section>
       )}
 
-      {user?.role === "manager" && (
+      {actor.role === "manager" && (
         <section className="mb-8">
           <h3 className="mb-2 text-sm font-medium text-gray-500">My leave grants</h3>
           <MyGrantsList grants={myGrants} />

@@ -4,6 +4,13 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 export const resourceIdSchema = z.string().uuid("Invalid identifier");
 
+export const loginSchema = z.object({
+  email: z.email().max(254),
+  password: z.string().min(1).max(128),
+}).strict();
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
 export const mockLoginRequestSchema = z.object({
   email: z.string().email("Invalid email").max(254, "Email is too long"),
 }).strict();

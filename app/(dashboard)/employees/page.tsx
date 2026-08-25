@@ -1,21 +1,16 @@
-import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/admin";
-import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { EmployeeList } from "@/components/features/employees/employee-list";
 import { EmployeeDialog } from "@/components/features/employees/employee-dialog";
 
 export default async function EmployeesPage() {
-  const cookieStore = await cookies();
-  const session = getSessionFromRequest(cookieStore.toString());
-  const supabase = await createClient();
-  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
+  const { actor, db } = await requireRequestContext();
 
-  const { data: employees } = await supabase
+  const { data: employees } = await db
     .from("employees")
     .select("*, users(email, role)")
     .order("employee_code");
 
-  const canManage = user?.role === "admin";
+  const canManage = actor.role === "admin";
 
   return (
     <div>
@@ -25,7 +20,7 @@ export default async function EmployeesPage() {
       </div>
       <EmployeeList
         employees={employees ?? []}
-        currentEmployeeId={employee?.id ?? null}
+        currentEmployeeId={actor.employee?.id ?? null}
         canManage={canManage}
       />
     </div>

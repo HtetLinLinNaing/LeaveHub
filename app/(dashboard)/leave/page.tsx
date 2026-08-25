@@ -1,40 +1,35 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/admin";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { getCachedLeaveTypes, getCachedYearHolidays } from "@/lib/cache";
 import { getGrantDrivenOverview } from "@/lib/grants";
 import { LeaveRequestList } from "@/components/features/leave/leave-request-list";
 import { LeaveRequestDialog } from "@/components/features/leave/leave-request-dialog";
 
 export default async function LeavePage() {
-  const cookieStore = await cookies();
-  const session = getSessionFromRequest(cookieStore.toString());
-  const supabase = await createClient();
-  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
+  const { actor, db } = await requireRequestContext();
 
   // Admin has no employees row and no leave to manage.
-  if (user?.role === "admin") redirect("/");
+  if (actor.role === "admin") redirect("/");
 
   const year = new Date().getFullYear();
   const [leaveTypes, { data: balances }, { data: requests }, holidays] =
     await Promise.all([
       getCachedLeaveTypes(),
-      supabase
+      db
         .from("leave_balances")
         .select("*, leave_types(name)")
-        .eq("employee_id", employee?.id)
+        .eq("employee_id", actor.employee?.id)
         .eq("year", year),
-      supabase
+      db
         .from("leave_requests")
         .select("*, leave_types(name), leave_request_days(date, duration)")
-        .eq("employee_id", employee?.id)
+        .eq("employee_id", actor.employee?.id)
         .order("created_at", { ascending: false }),
       getCachedYearHolidays(year),
     ]);
 
-  const grantDrivenOverview = employee
-    ? await getGrantDrivenOverview(supabase, employee.id, year)
+  const grantDrivenOverview = actor.employee
+    ? await getGrantDrivenOverview(db, actor.employee.id, year)
     : [];
 
   // Look up the Compassionate entry so we can keep the existing

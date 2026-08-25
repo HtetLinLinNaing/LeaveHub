@@ -6,13 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "auth:bootstrap-demo": "node --env-file=.env.local scripts/bootstrap-demo-auth.mjs",
     "lint": "eslint",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
-    "@supabase/ssr": "^0.12.4",
+    "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "@tanstack/react-query": "^5.101.4",
     "class-variance-authority": "^0.7.1",

@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
-import { getCurrentEmployee, getSessionFromRequest } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/admin";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { getCachedYearHolidays } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,14 +7,11 @@ import { getGrantDrivenOverview } from "@/lib/grants";
 import { differenceInCalendarDays, format } from "date-fns";
 
 export default async function DashboardPage() {
-  const cookieStore = await cookies();
-  const session = getSessionFromRequest(cookieStore.toString());
-  const supabase = await createClient();
-  const { user, employee } = await getCurrentEmployee(supabase, session?.email);
+  const { actor, db } = await requireRequestContext();
   const today = format(new Date(), "yyyy-MM-dd");
   const year = new Date().getFullYear();
 
-  if (user?.role === "admin") {
+  if (actor.role === "admin") {
     const startOfMonth = format(new Date(year, new Date().getMonth(), 1), "yyyy-MM-dd");
     const [
       { count: pendingCount },
@@ -24,16 +19,16 @@ export default async function DashboardPage() {
       { count: onLeaveToday },
       holidays,
     ] = await Promise.all([
-      supabase
+      db
         .from("leave_requests")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending"),
-      supabase
+      db
         .from("leave_requests")
         .select("*", { count: "exact", head: true })
         .eq("status", "approved")
         .gte("approved_at", startOfMonth),
-      supabase
+      db
         .from("leave_requests")
         .select("*", { count: "exact", head: true })
         .eq("status", "approved")
@@ -99,27 +94,27 @@ export default async function DashboardPage() {
     { data: recentRequests },
     holidays,
   ] = await Promise.all([
-    supabase
+    db
       .from("leave_balances")
       .select("*, leave_types(name)")
-      .eq("employee_id", employee?.id ?? "")
+      .eq("employee_id", actor.employee?.id ?? "")
       .eq("year", year),
-    supabase
+    db
       .from("leave_requests")
       .select("*", { count: "exact", head: true })
-      .eq("employee_id", employee?.id ?? "")
+      .eq("employee_id", actor.employee?.id ?? "")
       .eq("status", "pending"),
-    supabase
+    db
       .from("leave_requests")
       .select("*, leave_types(name)")
-      .eq("employee_id", employee?.id ?? "")
+      .eq("employee_id", actor.employee?.id ?? "")
       .order("created_at", { ascending: false })
       .limit(5),
     getCachedYearHolidays(year),
   ]);
 
-  const grantDrivenOverview = employee
-    ? await getGrantDrivenOverview(supabase, employee.id, year)
+  const grantDrivenOverview = actor.employee
+    ? await getGrantDrivenOverview(db, actor.employee.id, year)
     : [];
 
   // Compassionate Leave is rendered separately with derived values. Drop
@@ -133,7 +128,7 @@ export default async function DashboardPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">
-        Welcome{employee ? `, ${employee.first_name}` : ""}
+        Welcome{actor.employee ? `, ${actor.employee.firstName}` : ""}
       </h1>
 
       {/* Balance cards */}

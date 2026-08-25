@@ -1,15 +1,15 @@
-import { createClient } from "@/lib/supabase/admin";
+import { requireRequestContext } from "@/lib/dal/request-context";
 import { getCachedYearHolidays } from "@/lib/cache";
 import { TeamCalendar } from "@/components/features/calendar/team-calendar";
 
 export default async function CalendarPage() {
-  const supabase = await createClient();
+  const { db } = await requireRequestContext();
   const year = new Date().getFullYear();
 
   // Fetch raw approved rows, then hydrate employee + leave_type in JS.
   // PostgREST nested joins silently return 0 rows in this project; the
   // JS-side pattern is what makes /approvals render correctly.
-  const { data: rawLeave } = await supabase
+  const { data: rawLeave } = await db
     .from("leave_requests")
     .select("id, employee_id, leave_type_id, start_date, end_date, days, duration_type")
     .eq("status", "approved")
@@ -26,13 +26,13 @@ export default async function CalendarPage() {
   const [holidays, employeesRes, leaveTypesRes] = await Promise.all([
     getCachedYearHolidays(year),
     employeeIds.length
-      ? supabase
+      ? db
           .from("employees")
           .select("id, first_name, last_name, department")
           .in("id", employeeIds)
       : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string; department: string }> }),
     leaveTypeIds.length
-      ? supabase.from("leave_types").select("id, name").in("id", leaveTypeIds)
+      ? db.from("leave_types").select("id, name").in("id", leaveTypeIds)
       : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
   ]);
 
