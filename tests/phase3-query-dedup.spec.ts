@@ -221,3 +221,36 @@ test("starts grant overview with the dashboard query wave", () => {
 test("starts grant overview with the leave query wave", () => {
   expectOverviewInFirstQueryWave("app/(dashboard)/leave/page.tsx");
 });
+
+test("calendar propagates request and hydration failures", () => {
+  const source = readFileSync("app/(dashboard)/calendar/page.tsx", "utf8");
+  expect(source).toContain("if (rawLeaveError) throw rawLeaveError");
+  expect(source).toContain("if (employeesRes.error) throw employeesRes.error");
+  expect(source).toContain("if (leaveTypesRes.error) throw leaveTypesRes.error");
+});
+
+test("server-only data boundaries do not add cross-request caching", () => {
+  const approvalsDal = readFileSync("lib/dal/approvals.ts", "utf8");
+  const grants = readFileSync("lib/grants.ts", "utf8");
+
+  expect(approvalsDal.startsWith('import "server-only";')).toBeTruthy();
+  expect(approvalsDal).not.toContain("unstable_cache");
+  expect(approvalsDal).not.toContain('"use cache"');
+  expect(grants).not.toContain("unstable_cache");
+  expect(grants).not.toContain('"use cache"');
+});
+
+test("protected pages use request context without API self-fetches", () => {
+  const protectedPages = [
+    "app/(dashboard)/page.tsx",
+    "app/(dashboard)/leave/page.tsx",
+    "app/(dashboard)/approvals/page.tsx",
+    "app/(dashboard)/calendar/page.tsx",
+  ];
+
+  for (const path of protectedPages) {
+    const source = readFileSync(path, "utf8");
+    expect(source).toContain('import { requireRequestContext } from "@/lib/dal/request-context"');
+    expect(source).not.toContain("/api/");
+  }
+});
