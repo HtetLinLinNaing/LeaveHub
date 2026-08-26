@@ -1,18 +1,17 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
+import {
+  loadGrantDrivenOverview,
+  type GrantDrivenOverviewEntry,
+} from "@/lib/grant-overview";
+import { createGrantOverviewReader } from "@/lib/grant-overview-supabase";
 
 export interface GrantDrivenAvailability {
   granted: number;
   used: number;
   available: number;
   pending: number;
-}
-
-export interface GrantDrivenOverviewEntry extends GrantDrivenAvailability {
-  leaveTypeId: string;
-  leaveTypeName: string;
 }
 
 // Pool model for a single grant-driven leave type.
@@ -76,25 +75,7 @@ export async function getGrantDrivenOverview(
   employeeId: string,
   year: number
 ): Promise<GrantDrivenOverviewEntry[]> {
-  const { data: types, error: typesError } = await supabase
-    .from("leave_types")
-    .select("id, name")
-    .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
-  if (typesError) throw typesError;
-
-  const matched = (types ?? []).filter((t): t is { id: string; name: string } =>
-    (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(t.name)
-  );
-  if (matched.length === 0) return [];
-
-  const entries = await Promise.all(
-    matched.map(async (t) => {
-      const a = await getGrantDrivenAvailability(supabase, employeeId, year, t.id);
-      return { leaveTypeId: t.id, leaveTypeName: t.name, ...a };
-    })
-  );
-
-  return entries.filter(
-    (e) => e.granted > 0 || e.used > 0 || e.pending > 0
+  return loadGrantDrivenOverview(
+    createGrantOverviewReader(supabase, employeeId, year)
   );
 }

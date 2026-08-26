@@ -5,6 +5,7 @@ export default defineConfig({
   testMatch: [
     "phase1-guardrails.spec.ts",
     "phase2-auth-contract.spec.ts",
+    "phase3-query-dedup.spec.ts",
     "bootstrap-demo-auth.spec.ts",
     "e2e-auth-helper.spec.ts",
   ],

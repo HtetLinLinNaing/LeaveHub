@@ -14,9 +14,9 @@ export default async function DashboardPage() {
   if (actor.role === "admin") {
     const startOfMonth = format(new Date(year, new Date().getMonth(), 1), "yyyy-MM-dd");
     const [
-      { count: pendingCount },
-      { count: approvedThisMonth },
-      { count: onLeaveToday },
+      pendingResult,
+      approvedResult,
+      onLeaveResult,
       holidays,
     ] = await Promise.all([
       db
@@ -36,6 +36,13 @@ export default async function DashboardPage() {
         .gte("end_date", today),
       getCachedYearHolidays(year),
     ]);
+    if (pendingResult.error) throw pendingResult.error;
+    if (approvedResult.error) throw approvedResult.error;
+    if (onLeaveResult.error) throw onLeaveResult.error;
+
+    const pendingCount = pendingResult.count;
+    const approvedThisMonth = approvedResult.count;
+    const onLeaveToday = onLeaveResult.count;
 
     return (
       <div>
@@ -89,10 +96,11 @@ export default async function DashboardPage() {
   }
 
   const [
-    { data: balances },
-    { count: pendingCount },
-    { data: recentRequests },
+    balancesResult,
+    pendingResult,
+    recentRequestsResult,
     holidays,
+    grantDrivenOverview,
   ] = await Promise.all([
     db
       .from("leave_balances")
@@ -111,11 +119,17 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
     getCachedYearHolidays(year),
+    actor.employee
+      ? getGrantDrivenOverview(db, actor.employee.id, year)
+      : Promise.resolve([]),
   ]);
+  if (balancesResult.error) throw balancesResult.error;
+  if (pendingResult.error) throw pendingResult.error;
+  if (recentRequestsResult.error) throw recentRequestsResult.error;
 
-  const grantDrivenOverview = actor.employee
-    ? await getGrantDrivenOverview(db, actor.employee.id, year)
-    : [];
+  const balances = balancesResult.data;
+  const pendingCount = pendingResult.count;
+  const recentRequests = recentRequestsResult.data;
 
   // Compassionate Leave is rendered separately with derived values. Drop
   // any stale leave_balances row for it so the old card doesn't appear.

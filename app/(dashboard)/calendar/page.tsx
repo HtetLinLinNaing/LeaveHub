@@ -9,12 +9,13 @@ export default async function CalendarPage() {
   // Fetch raw approved rows, then hydrate employee + leave_type in JS.
   // PostgREST nested joins silently return 0 rows in this project; the
   // JS-side pattern is what makes /approvals render correctly.
-  const { data: rawLeave } = await db
+  const { data: rawLeave, error: rawLeaveError } = await db
     .from("leave_requests")
     .select("id, employee_id, leave_type_id, start_date, end_date, days, duration_type")
     .eq("status", "approved")
     .gte("end_date", `${year}-01-01`)
     .lte("start_date", `${year}-12-31`);
+  if (rawLeaveError) throw rawLeaveError;
 
   const employeeIds = Array.from(
     new Set((rawLeave ?? []).map((r) => r.employee_id).filter(Boolean) as string[])
@@ -30,11 +31,13 @@ export default async function CalendarPage() {
           .from("employees")
           .select("id, first_name, last_name, department")
           .in("id", employeeIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string; department: string }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string; department: string }>, error: null }),
     leaveTypeIds.length
       ? db.from("leave_types").select("id, name").in("id", leaveTypeIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }>, error: null }),
   ]);
+  if (employeesRes.error) throw employeesRes.error;
+  if (leaveTypesRes.error) throw leaveTypesRes.error;
 
   const empById = new Map((employeesRes.data ?? []).map((e) => [e.id, e]));
   const typeById = new Map((leaveTypesRes.data ?? []).map((t) => [t.id, t]));
