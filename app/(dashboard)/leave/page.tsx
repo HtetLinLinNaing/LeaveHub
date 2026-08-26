@@ -12,7 +12,7 @@ export default async function LeavePage() {
   if (actor.role === "admin") redirect("/");
 
   const year = new Date().getFullYear();
-  const [leaveTypes, { data: balances }, { data: requests }, holidays, grantDrivenOverview] =
+  const [leaveTypes, balancesResult, requestsResult, holidays, grantDrivenOverview] =
     await Promise.all([
       getCachedLeaveTypes(),
       db
@@ -30,6 +30,11 @@ export default async function LeavePage() {
         ? getGrantDrivenOverview(db, actor.employee.id, year)
         : Promise.resolve([]),
     ]);
+  if (balancesResult.error) throw balancesResult.error;
+  if (requestsResult.error) throw requestsResult.error;
+
+  const balances = balancesResult.data;
+  const requests = requestsResult.data;
 
   // Look up the Compassionate entry so we can keep the existing
   // `compassionateAvailable` prop behavior on the request dialog.

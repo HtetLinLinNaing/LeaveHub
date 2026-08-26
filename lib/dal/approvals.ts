@@ -11,24 +11,21 @@ import {
 } from "@/lib/approvals-read-model";
 import type { Actor } from "@/lib/auth/session";
 import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
+import { createApprovalsQueries } from "@/lib/approvals-supabase-queries";
 
 export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
+  const queries = createApprovalsQueries(db);
+
   return {
     async loadManagerScope(managerEmployeeId) {
-      const { data: directReports, error: reportsError } = await db
-        .from("employees")
-        .select("id,user_id,first_name,last_name,employee_code,status")
-        .eq("manager_id", managerEmployeeId)
-        .order("first_name");
-      if (reportsError) throw reportsError;
+      const directReports = await queries.loadDirectReports(managerEmployeeId);
 
       const reportUserIds = Array.from(
         new Set((directReports ?? []).map((report) => report.user_id))
       );
-      const { data: reportUsers, error: usersError } = reportUserIds.length
-        ? await db.from("users").select("id,role").in("id", reportUserIds)
-        : { data: [] as { id: string; role: string }[], error: null };
-      if (usersError) throw usersError;
+      const reportUsers = reportUserIds.length
+        ? await queries.loadUsers(reportUserIds)
+        : [];
 
       const roleByUserId = new Map(
         (reportUsers ?? []).map((reportUser) => [reportUser.id, reportUser.role])
@@ -49,19 +46,9 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
     },
 
     async loadPendingRequests(scopedEmployeeIds) {
-      const requestQuery = db
-        .from("leave_requests")
-        .select("id,employee_id,leave_type_id,start_date,end_date,days,duration_type,reason,status,created_at")
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
-      const { data: rawRequests, error: requestsError } = await (
-        scopedEmployeeIds === null
-          ? requestQuery
-          : requestQuery.in("employee_id", scopedEmployeeIds)
+      const requestRows = await queries.loadPendingRequestRows(
+        scopedEmployeeIds
       );
-      if (requestsError) throw requestsError;
-
-      const requestRows = rawRequests ?? [];
       if (requestRows.length === 0) return [];
 
       const employeeIds = Array.from(
@@ -70,28 +57,14 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
       const leaveTypeIds = Array.from(
         new Set(requestRows.map((request) => request.leave_type_id))
       );
-      const [employeesResult, leaveTypesResult] = await Promise.all([
-        db
-          .from("employees")
-          .select("id,first_name,last_name,employee_code,department,manager_id,user_id")
-          .in("id", employeeIds),
-        db
-          .from("leave_types")
-          .select("id,name")
-          .in("id", leaveTypeIds),
+      const [employees, leaveTypes] = await Promise.all([
+        queries.loadRequestEmployees(employeeIds),
+        queries.loadLeaveTypesByIds(leaveTypeIds),
       ]);
-      if (employeesResult.error) throw employeesResult.error;
-      if (leaveTypesResult.error) throw leaveTypesResult.error;
-
-      const employees = employeesResult.data ?? [];
-      const leaveTypes = leaveTypesResult.data ?? [];
       const userIds = Array.from(
         new Set(employees.map((employee) => employee.user_id))
       );
-      const { data: users, error: usersError } = userIds.length
-        ? await db.from("users").select("id,role").in("id", userIds)
-        : { data: [] as { id: string; role: string }[], error: null };
-      if (usersError) throw usersError;
+      const users = userIds.length ? await queries.loadUsers(userIds) : [];
 
       const employeeMap = new Map(
         employees.map((employee) => [employee.id, employee])
@@ -133,11 +106,7 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
     },
 
     async loadAdminPendingGrants() {
-      const { data: allTypes, error: typesError } = await db
-        .from("leave_types")
-        .select("id,name")
-        .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
-      if (typesError) throw typesError;
+      const allTypes = await queries.loadGrantDrivenTypes();
 
       const matchedTypes = (allTypes ?? []).filter((type) =>
         (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(type.name)
@@ -147,15 +116,7 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
         matchedTypes.map((type) => [type.id, type.name])
       );
 
-      const { data: rawGrants, error: grantsError } = await db
-        .from("leave_grants")
-        .select("id,employee_id,leave_type_id,days,reason,created_at,created_by,status")
-        .eq("status", "pending")
-        .in("leave_type_id", typeIds)
-        .order("created_at", { ascending: true });
-      if (grantsError) throw grantsError;
-
-      const grantRows = rawGrants ?? [];
+      const grantRows = await queries.loadAdminPendingGrantRows(typeIds);
       if (grantRows.length === 0) return [];
 
       const employeeIds = Array.from(
@@ -164,11 +125,7 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
           ...grantRows.map((grant) => grant.created_by),
         ])
       );
-      const { data: employees, error: employeesError } = await db
-        .from("employees")
-        .select("id,first_name,last_name,employee_code,department")
-        .in("id", employeeIds);
-      if (employeesError) throw employeesError;
+      const employees = await queries.loadPendingGrantEmployees(employeeIds);
 
       const employeeMap = new Map(
         (employees ?? []).map((employee) => [employee.id, employee])
@@ -201,11 +158,7 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
     },
 
     async loadManagerOwnGrants(managerEmployeeId) {
-      const { data: allTypes, error: typesError } = await db
-        .from("leave_types")
-        .select("id,name")
-        .in("name", [...GRANT_DRIVEN_LEAVE_TYPES]);
-      if (typesError) throw typesError;
+      const allTypes = await queries.loadGrantDrivenTypes();
 
       const matchedTypes = (allTypes ?? []).filter((type) =>
         (GRANT_DRIVEN_LEAVE_TYPES as readonly string[]).includes(type.name)
@@ -214,25 +167,16 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
         matchedTypes.map((type) => [type.id, type.name])
       );
 
-      const { data: rawGrants, error: grantsError } = await db
-        .from("leave_grants")
-        .select("id,employee_id,leave_type_id,days,reason,status,created_at,approved_at,rejected_at")
-        .eq("created_by", managerEmployeeId)
-        .in("leave_type_id", matchedTypes.map((type) => type.id))
-        .order("created_at", { ascending: false });
-      if (grantsError) throw grantsError;
-
-      const grantRows = rawGrants ?? [];
+      const grantRows = await queries.loadManagerGrantRows(
+        managerEmployeeId,
+        matchedTypes.map((type) => type.id)
+      );
       if (grantRows.length === 0) return [];
 
       const employeeIds = Array.from(
         new Set(grantRows.map((grant) => grant.employee_id))
       );
-      const { data: employees, error: employeesError } = await db
-        .from("employees")
-        .select("id,first_name,last_name,employee_code")
-        .in("id", employeeIds);
-      if (employeesError) throw employeesError;
+      const employees = await queries.loadManagerGrantEmployees(employeeIds);
 
       const employeeMap = new Map(
         (employees ?? []).map((employee) => [employee.id, employee])
@@ -262,13 +206,7 @@ export function createApprovalsReader(db: SupabaseClient): ApprovalsReader {
     },
 
     async loadActiveEmployees() {
-      const { data: employees, error } = await db
-        .from("employees")
-        .select("id,first_name,last_name,employee_code")
-        .eq("status", "active")
-        .order("first_name");
-      if (error) throw error;
-      return employees ?? [];
+      return queries.loadActiveEmployees();
     },
   };
 }

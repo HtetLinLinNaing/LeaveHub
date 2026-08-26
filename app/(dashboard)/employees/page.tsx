@@ -5,10 +5,11 @@ import { EmployeeDialog } from "@/components/features/employees/employee-dialog"
 export default async function EmployeesPage() {
   const { actor, db } = await requireRequestContext();
 
-  const { data: employees } = await db
+  const { data: employees, error } = await db
     .from("employees")
     .select("*, users(email, role)")
     .order("employee_code");
+  if (error) throw error;
 
   const canManage = actor.role === "admin";
 

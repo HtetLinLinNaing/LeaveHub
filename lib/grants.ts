@@ -1,13 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PostgrestResponse } from "@supabase/postgrest-js";
-import { GRANT_DRIVEN_LEAVE_TYPES } from "@/lib/constants";
 import {
   loadGrantDrivenOverview,
   type GrantDrivenOverviewEntry,
-  type GrantOverviewReader,
 } from "@/lib/grant-overview";
+import { createGrantOverviewReader } from "@/lib/grant-overview-supabase";
 
 export interface GrantDrivenAvailability {
   granted: number;
@@ -77,57 +75,7 @@ export async function getGrantDrivenOverview(
   employeeId: string,
   year: number
 ): Promise<GrantDrivenOverviewEntry[]> {
-  const yearStart = `${year}-01-01`;
-  const yearEnd = `${year}-12-31T23:59:59`;
-
-  const queryRows = async <T>(
-    promise: PromiseLike<PostgrestResponse<T>>
-  ): Promise<T[]> => {
-    const result = await promise;
-    if (result.error) throw result.error;
-    return result.data ?? [];
-  };
-
-  const reader: GrantOverviewReader = {
-    loadTypes: () =>
-      queryRows(
-        supabase
-          .from("leave_types")
-          .select("id, name")
-          .in("name", [...GRANT_DRIVEN_LEAVE_TYPES])
-      ),
-    loadApproved: (typeIds) =>
-      queryRows(
-        supabase
-          .from("leave_grants")
-          .select("leave_type_id, days")
-          .eq("employee_id", employeeId)
-          .in("leave_type_id", typeIds)
-          .eq("status", "approved")
-          .gte("approved_at", yearStart)
-          .lte("approved_at", yearEnd)
-      ),
-    loadUsed: (typeIds) =>
-      queryRows(
-        supabase
-          .from("leave_requests")
-          .select("leave_type_id, days")
-          .eq("employee_id", employeeId)
-          .in("leave_type_id", typeIds)
-          .eq("status", "approved")
-          .gte("start_date", yearStart)
-          .lte("start_date", yearEnd)
-      ),
-    loadPending: (typeIds) =>
-      queryRows(
-        supabase
-          .from("leave_grants")
-          .select("leave_type_id, days")
-          .eq("employee_id", employeeId)
-          .in("leave_type_id", typeIds)
-          .eq("status", "pending")
-      ),
-  };
-
-  return loadGrantDrivenOverview(reader);
+  return loadGrantDrivenOverview(
+    createGrantOverviewReader(supabase, employeeId, year)
+  );
 }
